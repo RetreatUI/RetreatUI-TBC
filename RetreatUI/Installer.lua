@@ -30,8 +30,12 @@ local function Button(parent, text, width, callback)
   button.label = Font(button, text, 11)
   button.label:SetPoint("CENTER")
   button:SetScript("OnClick", callback)
-  button:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(0.95, 0.58, 0.12, 1) end)
-  button:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(0.58, 0.36, 0.08, 1) end)
+  button:SetScript("OnEnter", function(self)
+    if self:IsEnabled() then self:SetBackdropBorderColor(0.95, 0.58, 0.12, 1) end
+  end)
+  button:SetScript("OnLeave", function(self)
+    if self:IsEnabled() then self:SetBackdropBorderColor(0.58, 0.36, 0.08, 1) end
+  end)
   return button
 end
 
@@ -46,7 +50,7 @@ local function PayloadReady(option)
     return ready, ready and "READY" or "PAYLOAD NOT EMBEDDED"
   end
   if option.key == "classWA" then
-    if RUI:GetPlayerClass() ~= "DRUID" then return true, "NO CLASS PACKAGE REQUIRED" end
+    if RUI:GetPlayerClass() ~= "DRUID" then return false, "NO CLASS PACKAGE FOR THIS CLASS" end
     local ready = type(RUI.weakAuraPayloads.druidResource) == "string" and RUI.weakAuraPayloads.druidResource ~= ""
       and type(RUI.weakAuraPayloads.druidMain) == "string" and RUI.weakAuraPayloads.druidMain ~= ""
       and type(RUI.weakAuraPayloads.druidUtility) == "string" and RUI.weakAuraPayloads.druidUtility ~= ""
@@ -55,10 +59,49 @@ local function PayloadReady(option)
   return true, "READY"
 end
 
+local function SetResult(text, success)
+  if not frame or not frame.result then return end
+  frame.result:SetText(text or "")
+  if success == true then
+    frame.result:SetTextColor(0.35, 0.9, 0.45)
+  elseif success == false then
+    frame.result:SetTextColor(0.95, 0.35, 0.2)
+  else
+    frame.result:SetTextColor(0.7, 0.75, 0.8)
+  end
+end
+
+local function RefreshRows()
+  if not frame or not frame.rows then return end
+  local db = RUI:EnsureDB()
+  for _, option in ipairs(OPTIONS) do
+    local row = frame.rows[option.key]
+    local ready, status = PayloadReady(option)
+    row.available = ready
+    row.status:SetText(status)
+    row.status:SetTextColor(ready and 0.25 or 0.9, ready and 0.8 or 0.25, ready and 0.35 or 0.2)
+
+    if not ready then
+      db.selected[option.key] = false
+      row.toggle:Disable()
+      row.toggle.label:SetText("N/A")
+      row.toggle:SetAlpha(0.55)
+      row:SetAlpha(0.72)
+    else
+      row.toggle:Enable()
+      local enabled = db.selected[option.key] ~= false
+      db.selected[option.key] = enabled
+      row.toggle.label:SetText(enabled and "ON" or "OFF")
+      row.toggle:SetAlpha(1)
+      row:SetAlpha(enabled and 1 or 0.55)
+    end
+  end
+end
+
 local function BuildInstaller()
   if frame then return frame end
   frame = CreateFrame("Frame", "RetreatUITBCInstaller", UIParent, "BackdropTemplate")
-  frame:SetSize(760, 500)
+  frame:SetSize(760, 520)
   frame:SetPoint("CENTER")
   frame:SetFrameStrata("DIALOG")
   frame:SetMovable(true)
@@ -71,7 +114,7 @@ local function BuildInstaller()
   local title = Font(frame, "RETREATUI — THE BURNING CRUSADE", 20)
   title:SetPoint("TOPLEFT", 28, -26)
   title:SetTextColor(0.95, 0.58, 0.12)
-  local subtitle = Font(frame, "Install the shared layout, addon profiles and the correct class HUD package.", 11)
+  local subtitle = Font(frame, "Install the RetreatUI layout, profiles and class HUD package.", 11)
   subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -9)
   subtitle:SetTextColor(0.72, 0.76, 0.82)
   local classText = Font(frame, "Detected class: " .. (UnitClass("player") or "Unknown"), 12)
@@ -85,11 +128,10 @@ local function BuildInstaller()
     SetBackdrop(row, { 0.03, 0.04, 0.05, 0.92 }, { 0.12, 0.15, 0.18, 1 })
     row.title = Font(row, option.label, 12)
     row.title:SetPoint("LEFT", 16, 8)
-    local ready, status = PayloadReady(option)
-    row.status = Font(row, status, 9)
+    row.status = Font(row, "Checking...", 9)
     row.status:SetPoint("LEFT", 16, -10)
-    row.status:SetTextColor(ready and 0.25 or 0.9, ready and 0.8 or 0.25, ready and 0.35 or 0.2)
     row.toggle = Button(row, "ON", 64, function(self)
+      if not row.available then return end
       local db = RUI:EnsureDB()
       db.selected[option.key] = not db.selected[option.key]
       self.label:SetText(db.selected[option.key] and "ON" or "OFF")
@@ -99,54 +141,74 @@ local function BuildInstaller()
     frame.rows[option.key] = row
   end
 
-  frame.result = Font(frame, "Ready.", 10)
-  frame.result:SetPoint("BOTTOMLEFT", 28, 26)
+  -- Keep status output inside the installer. The previous single-line fontstring
+  -- could extend underneath the buttons and beyond the frame on long errors.
+  local resultPanel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+  resultPanel:SetPoint("BOTTOMLEFT", 28, 18)
+  resultPanel:SetPoint("BOTTOMRIGHT", -390, 18)
+  resultPanel:SetHeight(54)
+  SetBackdrop(resultPanel, { 0.02, 0.027, 0.034, 0.92 }, { 0.12, 0.15, 0.18, 1 })
+
+  frame.result = Font(resultPanel, "Ready.", 9)
+  frame.result:SetPoint("TOPLEFT", 10, -8)
+  frame.result:SetPoint("BOTTOMRIGHT", -10, 8)
+  frame.result:SetJustifyH("LEFT")
+  frame.result:SetJustifyV("TOP")
+  frame.result:SetWordWrap(true)
+  frame.result:SetNonSpaceWrap(true)
   frame.result:SetTextColor(0.7, 0.75, 0.8)
 
   frame.install = Button(frame, "INSTALL SELECTED", 165, function()
     if InCombatLockdown and InCombatLockdown() then
-      frame.result:SetText("Leave combat before installing.")
-      frame.result:SetTextColor(0.95, 0.25, 0.2)
+      SetResult("Leave combat before installing.", false)
       return
     end
-    local messages, allSucceeded = {}, true
+
+    RefreshRows()
+    local messages, allSucceeded, attempted = {}, true, 0
     local profiles = RUI.modules.profiles
     if profiles and profiles.InstallSelected then
       for key, result in pairs(profiles:InstallSelected()) do
+        attempted = attempted + 1
         local ok, message = result[1], result[2]
         messages[#messages + 1] = key .. ": " .. (ok and "installed" or tostring(message or "failed"))
         if not ok then allSucceeded = false end
       end
     end
+
     local wa = RUI.modules.weakauras
     if wa and wa.InstallSelected then
       for key, result in pairs(wa:InstallSelected()) do
+        attempted = attempted + 1
         local ok, message = result[1], result[2]
         messages[#messages + 1] = key .. ": " .. (ok and "imported" or tostring(message or "failed"))
         if not ok then allSucceeded = false end
       end
     end
+
     local db = RUI:EnsureDB()
-    db.installerCompleted = allSucceeded
-    frame.result:SetText(table.concat(messages, "  •  "))
-    frame.result:SetTextColor(allSucceeded and 0.35 or 0.95, allSucceeded and 0.9 or 0.35, allSucceeded and 0.45 or 0.2)
+    db.installerCompleted = attempted > 0 and allSucceeded
+
+    if attempted == 0 then
+      SetResult("Nothing available is selected for installation.", false)
+    else
+      SetResult(table.concat(messages, "\n"), allSucceeded)
+    end
   end)
   frame.install:SetPoint("BOTTOMRIGHT", -28, 18)
+
   frame.reload = Button(frame, "RELOAD UI", 110, function() ReloadUI() end)
   frame.reload:SetPoint("RIGHT", frame.install, "LEFT", -10, 0)
   frame.close = Button(frame, "X", 32, function() frame:Hide() end)
   frame.close:SetPoint("TOPRIGHT", -10, -10)
+
+  RefreshRows()
   return frame
 end
 
 function RUI:OpenInstaller()
   local installer = BuildInstaller()
-  local db = self:EnsureDB()
-  for _, option in ipairs(OPTIONS) do
-    local row = installer.rows[option.key]
-    local enabled = db.selected[option.key]
-    row.toggle.label:SetText(enabled and "ON" or "OFF")
-    row:SetAlpha(enabled and 1 or 0.55)
-  end
+  RefreshRows()
+  SetResult("Ready. Install the available RetreatUI components, then reload UI.", nil)
   installer:Show()
 end
