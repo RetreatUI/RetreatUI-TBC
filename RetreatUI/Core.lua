@@ -17,12 +17,6 @@ local defaults = {
     details = true,
     classWA = true,
   },
-  hud = {
-    enabled = true,
-    scale = 1,
-    x = 0,
-    y = 27,
-  },
 }
 
 local function CopyDefaults(source, target)
