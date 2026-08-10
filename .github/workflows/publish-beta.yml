@@ -7,13 +7,19 @@ on:
       - "RetreatUI/**"
       - ".github/release-manifest.json"
       - ".github/workflows/publish-beta.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "RetreatUI/**"
+      - ".github/release-manifest.json"
+      - ".github/workflows/publish-beta.yml"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: retreatui-tbc-beta
+  group: retreatui-tbc-beta-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -39,6 +45,19 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "asset=RetreatUI_TBC_v$VERSION.zip" >> "$GITHUB_OUTPUT"
 
+      - name: Install Lua 5.1 compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+
+      - name: Validate Lua syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find RetreatUI -type f -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+
       - name: Validate addon
         shell: bash
         env:
@@ -48,9 +67,21 @@ jobs:
           test -f RetreatUI/RetreatUI.toc
           grep -q "^## Author: Retreat$" RetreatUI/RetreatUI.toc
           grep -q "^## Version: $VERSION$" RetreatUI/RetreatUI.toc
-          for file in Core.lua Profiles.lua WeakAuras.lua DruidRuntime.lua Installer.lua; do
+          for file in Core.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Installer.lua; do
             test -s "RetreatUI/$file"
           done
+          ! test -e RetreatUI/DruidRuntime.lua
+          grep -q '^WeakAuraData.lua$' RetreatUI/RetreatUI.toc
+          ! grep -q '^DruidRuntime.lua$' RetreatUI/RetreatUI.toc
+          ! grep -R 'weakAuraPayloads\|WeakAuras.Import' RetreatUI
+          grep -q 'type(WeakAuras.Add) == "function"' RetreatUI/WeakAuras.lua
+          grep -q 'VerifyDruidHUD' RetreatUI/WeakAuras.lua
+          grep -q 'COA_RESOURCE_X, COA_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_MAIN_X, COA_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_RESOURCE_WIDTH, COA_RESOURCE_HEIGHT = 360, 16' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_MAIN_ICON, COA_UTILITY_ICON = 38, 32' RetreatUI/WeakAuraData.lua
+          grep -q '33987' RetreatUI/WeakAuraData.lua
           ! grep -R "OpenAI\|ChatGPT" RetreatUI
 
       - name: Package
@@ -65,6 +96,8 @@ jobs:
           (cd dist/package && zip -r "../$ASSET" RetreatUI)
           test -s "dist/$ASSET"
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/RetreatUI\.toc$'
+          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/WeakAuraData\.lua$'
+          ! zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DruidRuntime\.lua$'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -74,7 +107,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create or update prerelease
-        if: steps.manifest.outputs.publish == 'true'
+        if: steps.manifest.outputs.publish == 'true' && github.event_name != 'pull_request'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -84,17 +117,17 @@ jobs:
         run: |
           set -euo pipefail
           NOTES=$(cat <<'EOF'
-          Standalone RetreatUI TBC beta.
+          RetreatUI TBC beta 4.
 
           Includes:
-          - TBC addon now lives in its own repository and release channel.
-          - Package installs as Interface/AddOns/RetreatUI.
-          - Native Druid HUD framework.
-          - ElvUI and Details integration.
-          - Hardened installer that no longer reports success when optional payloads are missing.
-          - Plater and WeakAuras import framework.
+          - Druid HUD is now installed as real WeakAuras displays instead of a native addon-rendered HUD.
+          - WeakAuras installation uses the WeakAuras data API and verifies every expected display, parent relationship and root position before reporting success.
+          - Resource, main ability and utility layers use the exact RetreatUI CoA center-HUD geometry between the ElvUI player and target frames.
+          - Druid form/resource handling, learned-rank detection, cooldown tracking and aura timers are handled inside the WeakAuras package.
+          - Corrected TBC Druid ability data including Mangle (Bear) spell ID 33987.
+          - ElvUI and Details integration remain available through the installer.
 
-          This remains a testing prerelease. Serialized Plater and WeakAuras payloads are still being finalized.
+          This remains a testing prerelease. Plater is only offered when an embedded profile is available.
           EOF
           )
           if gh release view "$TAG" >/dev/null 2>&1; then

@@ -6,8 +6,7 @@ local OPTIONS = {
   { key = "elvui", label = "ElvUI Layout", addon = "ElvUI" },
   { key = "plater", label = "Plater Profile", addon = "Plater" },
   { key = "details", label = "Details Profile", addon = "Details" },
-  { key = "generalWA", label = "General WeakAuras", addon = "WeakAuras" },
-  { key = "classWA", label = "Class WeakAuras", addon = "WeakAuras" },
+  { key = "classWA", label = "Druid WeakAuras HUD", addon = "WeakAuras" },
 }
 
 local function SetBackdrop(widget, color, border)
@@ -39,22 +38,17 @@ local function Button(parent, text, width, callback)
   return button
 end
 
-local function PayloadReady(option)
+local function OptionReady(option)
   if not RUI:IsAddonLoaded(option.addon) then return false, option.addon .. " NOT LOADED" end
   if option.key == "plater" then
     local ready = type(RUI.profilePayloads.plater) == "string" and RUI.profilePayloads.plater ~= ""
     return ready, ready and "READY" or "PROFILE NOT EMBEDDED"
   end
-  if option.key == "generalWA" then
-    local ready = type(RUI.weakAuraPayloads.general) == "string" and RUI.weakAuraPayloads.general ~= ""
-    return ready, ready and "READY" or "PAYLOAD NOT EMBEDDED"
-  end
   if option.key == "classWA" then
-    if RUI:GetPlayerClass() ~= "DRUID" then return false, "NO CLASS PACKAGE FOR THIS CLASS" end
-    local ready = type(RUI.weakAuraPayloads.druidResource) == "string" and RUI.weakAuraPayloads.druidResource ~= ""
-      and type(RUI.weakAuraPayloads.druidMain) == "string" and RUI.weakAuraPayloads.druidMain ~= ""
-      and type(RUI.weakAuraPayloads.druidUtility) == "string" and RUI.weakAuraPayloads.druidUtility ~= ""
-    return ready, ready and "READY" or "PAYLOAD NOT EMBEDDED"
+    if RUI:GetPlayerClass() ~= "DRUID" then return false, "DRUID PACKAGE ONLY" end
+    local wa = RUI.modules.weakauras
+    local ready = wa and wa.IsAvailable and wa:IsAvailable() and wa.IsClassSupported and wa:IsClassSupported()
+    return ready, ready and "READY — INSTALL + VERIFY" or "WEAKAURAS PACKAGE NOT READY"
   end
   return true, "READY"
 end
@@ -76,7 +70,7 @@ local function RefreshRows()
   local db = RUI:EnsureDB()
   for _, option in ipairs(OPTIONS) do
     local row = frame.rows[option.key]
-    local ready, status = PayloadReady(option)
+    local ready, status = OptionReady(option)
     row.available = ready
     row.status:SetText(status)
     row.status:SetTextColor(ready and 0.25 or 0.9, ready and 0.8 or 0.25, ready and 0.35 or 0.2)
@@ -101,7 +95,7 @@ end
 local function BuildInstaller()
   if frame then return frame end
   frame = CreateFrame("Frame", "RetreatUITBCInstaller", UIParent, "BackdropTemplate")
-  frame:SetSize(760, 520)
+  frame:SetSize(760, 470)
   frame:SetPoint("CENTER")
   frame:SetFrameStrata("DIALOG")
   frame:SetMovable(true)
@@ -114,7 +108,7 @@ local function BuildInstaller()
   local title = Font(frame, "RETREATUI — THE BURNING CRUSADE", 20)
   title:SetPoint("TOPLEFT", 28, -26)
   title:SetTextColor(0.95, 0.58, 0.12)
-  local subtitle = Font(frame, "Install the RetreatUI layout, profiles and class HUD package.", 11)
+  local subtitle = Font(frame, "Install the RetreatUI layout, profiles and WeakAuras class HUD.", 11)
   subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -9)
   subtitle:SetTextColor(0.72, 0.76, 0.82)
   local classText = Font(frame, "Detected class: " .. (UnitClass("player") or "Unknown"), 12)
@@ -141,8 +135,6 @@ local function BuildInstaller()
     frame.rows[option.key] = row
   end
 
-  -- Keep status output inside the installer. The previous single-line fontstring
-  -- could extend underneath the buttons and beyond the frame on long errors.
   local resultPanel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
   resultPanel:SetPoint("BOTTOMLEFT", 28, 18)
   resultPanel:SetPoint("BOTTOMRIGHT", -390, 18)
@@ -181,7 +173,7 @@ local function BuildInstaller()
       for key, result in pairs(wa:InstallSelected()) do
         attempted = attempted + 1
         local ok, message = result[1], result[2]
-        messages[#messages + 1] = key .. ": " .. (ok and "imported" or tostring(message or "failed"))
+        messages[#messages + 1] = key .. ": " .. (ok and tostring(message or "installed") or tostring(message or "failed"))
         if not ok then allSucceeded = false end
       end
     end

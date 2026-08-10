@@ -4,10 +4,10 @@ RetreatUITBC = RetreatUITBC or {}
 local RUI = RetreatUITBC
 
 RUI.name = addonName
-RUI.version = "0.1.0-beta.2"
+RUI.version = "0.1.0-beta.4"
 RUI.modules = RUI.modules or {}
 RUI.profilePayloads = RUI.profilePayloads or {}
-RUI.weakAuraPayloads = RUI.weakAuraPayloads or {}
+RUI.weakAuraPackages = RUI.weakAuraPackages or {}
 
 local defaults = {
   installerCompleted = false,
@@ -15,14 +15,7 @@ local defaults = {
     elvui = true,
     plater = true,
     details = true,
-    generalWA = true,
     classWA = true,
-  },
-  hud = {
-    enabled = true,
-    scale = 1,
-    x = 0,
-    y = 27,
   },
 }
 
