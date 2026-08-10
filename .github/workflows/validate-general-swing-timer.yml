@@ -1,0 +1,71 @@
+name: Validate TBC General Swing Timer
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "RetreatUI/GeneralSwingTimer.lua"
+      - "RetreatUI/GeneralWeakAuras.lua"
+      - "RetreatUI/RetreatUI.toc"
+      - ".github/workflows/validate-general-swing-timer.yml"
+  push:
+    branches: [main]
+    paths:
+      - "RetreatUI/GeneralSwingTimer.lua"
+      - "RetreatUI/GeneralWeakAuras.lua"
+      - "RetreatUI/RetreatUI.toc"
+      - ".github/workflows/validate-general-swing-timer.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+
+      - name: Validate swing timer package
+        shell: bash
+        run: |
+          set -euo pipefail
+          luac5.1 -p RetreatUI/GeneralSwingTimer.lua
+          luac5.1 -p RetreatUI/GeneralWeakAuras.lua
+
+          grep -q '^GeneralSwingTimer.lua$' RetreatUI/RetreatUI.toc
+          grep -q 'ROOT = "RetreatUI - General — Swing Timer"' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'SWING_X, SWING_Y = 0, -142' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'SWING_WIDTH, SWING_HEIGHT = 360, 5' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'SWING_SPACING = 1' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'use_class_and_spec = false' RetreatUI/GeneralSwingTimer.lua
+
+          # Melee specs: all Warrior, Prot/Ret Paladin, Feral, all Rogue, Enhancement.
+          for spec in 71 72 73 66 70 103 259 260 261 263; do
+            grep -q "\[$spec\] = true" RetreatUI/GeneralSwingTimer.lua
+          done
+
+          # Hunters get the ranged Auto Shot timer.
+          for spec in 253 254 255; do
+            grep -q "\[$spec\] = true" RetreatUI/GeneralSwingTimer.lua
+          done
+          grep -q 'tonumber(info\[12\]) == 75' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'UnitRangedDamage' RetreatUI/GeneralSwingTimer.lua
+
+          # Melee timing uses main/off-hand attack speed and combat-log swings.
+          grep -q 'UnitAttackSpeed' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'SWING_DAMAGE' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'SWING_MISSED' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'isOffHand = info\[21\] == true' RetreatUI/GeneralSwingTimer.lua
+          grep -q 'isOffHand = info\[13\] == true' RetreatUI/GeneralSwingTimer.lua
+
+          # Feral timer hides outside Cat/Bear power types.
+          grep -q 'powerType ~= 1 and powerType ~= 3' RetreatUI/GeneralSwingTimer.lua
+
+          # Installer verification must validate exact spec selections.
+          grep -q 'local function VerifySpecLoad' RetreatUI/GeneralWeakAuras.lua
+          grep -q 'expected.meleeSwingSpecs' RetreatUI/GeneralWeakAuras.lua
+          grep -q 'expected.offhandSwingSpecs' RetreatUI/GeneralWeakAuras.lua
+          grep -q 'expected.hunterSwingSpecs' RetreatUI/GeneralWeakAuras.lua
+          grep -q 'swingTimer = true' RetreatUI/GeneralWeakAuras.lua
