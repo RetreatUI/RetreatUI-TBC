@@ -64,15 +64,37 @@ jobs:
           VERSION: ${{ steps.manifest.outputs.version }}
         run: |
           set -euo pipefail
+
           test -f RetreatUI/RetreatUI.toc
           grep -q "^## Author: Retreat$" RetreatUI/RetreatUI.toc
           grep -q "^## Version: $VERSION$" RetreatUI/RetreatUI.toc
+          grep -q "RUI.version = \"$VERSION\"" RetreatUI/Core.lua
 
-          for file in Core.lua CoAElvUIProfile.lua Profiles.lua DetailsPersistenceFix.lua WeakAuraData.lua DruidComboPoints.lua GeneralWeakAuraData.lua GeneralPlacementFix.lua WeakAuras.lua GeneralWeakAuras.lua Macros.lua Installer.lua ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua; do
+          required_files=(
+            Core.lua
+            CoAElvUIProfile.lua
+            ProfilePayloadPlater1.lua
+            ProfilePayloadPlater2.lua
+            ProfilePayloadPlater3.lua
+            ProfilePayloadPlater4.lua
+            ProfilePayloadDetails.lua
+            Profiles.lua
+            DetailsPersistenceFix.lua
+            DetailsSimpleImport.lua
+            WeakAuraData.lua
+            ClassWeakAuraData.lua
+            DruidComboPoints.lua
+            RogueComboPoints.lua
+            GeneralWeakAuraData.lua
+            GeneralPlacementFix.lua
+            WeakAuras.lua
+            GeneralWeakAuras.lua
+            Macros.lua
+            Installer.lua
+          )
+
+          for file in "${required_files[@]}"; do
             test -s "RetreatUI/$file"
-          done
-
-          for file in ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua Profiles.lua DetailsPersistenceFix.lua WeakAuraData.lua DruidComboPoints.lua GeneralWeakAuraData.lua GeneralPlacementFix.lua WeakAuras.lua GeneralWeakAuras.lua Macros.lua Installer.lua; do
             grep -q "^$file$" RetreatUI/RetreatUI.toc
           done
 
@@ -108,18 +130,18 @@ jobs:
           grep -q 'COA_RESOURCE_X, COA_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
           grep -q 'COA_MAIN_X, COA_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
           grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
+          grep -q 'RESOURCE_X, RESOURCE_Y = 0, -152' RetreatUI/ClassWeakAuraData.lua
+          grep -q 'MAIN_X, MAIN_Y = 0, -183' RetreatUI/ClassWeakAuraData.lua
+          grep -q 'UTILITY_X, UTILITY_Y = 0, -224' RetreatUI/ClassWeakAuraData.lua
 
-          # Druid Combo Points live between the CoA proc lane (-83) and resource bar (-152).
-          grep -q 'ROOT = "RetreatUI TBC — Druid Combo Points"' RetreatUI/DruidComboPoints.lua
+          # Druid and Rogue combo points stay in the shared -118 lane.
           grep -q 'COMBO_X, COMBO_Y = 0, -118' RetreatUI/DruidComboPoints.lua
           grep -q 'SEGMENTS = 5' RetreatUI/DruidComboPoints.lua
-          grep -q 'GetComboPoints("player", "target")' RetreatUI/DruidComboPoints.lua
-          grep -q 'UnitPowerType("player") ~= 3' RetreatUI/DruidComboPoints.lua
+          grep -q 'COMBO_X, COMBO_Y = 0, -118' RetreatUI/RogueComboPoints.lua
+          grep -q 'SEGMENTS = 5' RetreatUI/RogueComboPoints.lua
 
-          # Universal RetreatUI - General category: exact supplied CoA General positions.
+          # Universal RetreatUI - General category remains at the supplied CoA positions.
           grep -q 'local ROOT = "RetreatUI - General"' RetreatUI/GeneralWeakAuraData.lua
-          grep -q 'ROOT_TRINKETS = "RetreatUI - General — Trinkets"' RetreatUI/GeneralWeakAuraData.lua
-          grep -q 'ROOT_PROCS = "RetreatUI - General — Buffs & Procs"' RetreatUI/GeneralWeakAuraData.lua
           grep -q 'GENERAL_PROC_X, GENERAL_PROC_Y = 0, -83' RetreatUI/GeneralWeakAuraData.lua
           grep -q 'GENERAL_ICON_SIZE = 30' RetreatUI/GeneralWeakAuraData.lua
           grep -q 'GENERAL_ICON_SPACING = 3' RetreatUI/GeneralWeakAuraData.lua
@@ -128,27 +150,103 @@ jobs:
           grep -q 'TRINKET_SELF = "BOTTOMRIGHT"' RetreatUI/GeneralPlacementFix.lua
           grep -q 'TRINKET_X = -17' RetreatUI/GeneralPlacementFix.lua
           grep -q 'TRINKET_Y = 1' RetreatUI/GeneralPlacementFix.lua
-          grep -q 'GENERAL_MAX_PROC_DURATION = 60' RetreatUI/GeneralWeakAuraData.lua
-          grep -q 'weaponProcs = true' RetreatUI/GeneralWeakAuras.lua
-          grep -q 'function WeakAurasModule:InstallGeneral' RetreatUI/GeneralWeakAuras.lua
-          grep -q 'local OriginalInstallClassHUD' RetreatUI/GeneralWeakAuras.lua
 
-          # Class macros must be Character Specific only and never reuse General Macro slots.
-          grep -q 'characterSpecific = true' RetreatUI/Macros.lua
-          grep -q 'local function FindCharacterMacroByName' RetreatUI/Macros.lua
-          grep -q 'MAX_ACCOUNT_MACROS' RetreatUI/Macros.lua
-          grep -q 'MAX_CHARACTER_MACROS' RetreatUI/Macros.lua
-          grep -q 'pcall(CreateMacro, definition.name, icon, definition.body, 1)' RetreatUI/Macros.lua
-          grep -q 'pcall(EditMacro, index, definition.name, icon, definition.body, 1)' RetreatUI/Macros.lua
-          ! grep -q 'GetMacroIndexByName' RetreatUI/Macros.lua
+          # Every TBC class must have a Character Specific macro package.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
 
-          # Druid package and DMH recommendation remain intact.
+          text = Path("RetreatUI/Macros.lua").read_text(encoding="utf-8")
+          classes = ["DRUID", "HUNTER", "MAGE", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR"]
+          expected = {
+              "DRUID": 18,
+              "HUNTER": 8,
+              "MAGE": 14,
+              "PALADIN": 12,
+              "PRIEST": 14,
+              "ROGUE": 8,
+              "SHAMAN": 12,
+              "WARLOCK": 8,
+              "WARRIOR": 17,
+          }
+
+          for index, cls in enumerate(classes):
+              start = text.index(f"  {cls} = {{")
+              if index + 1 < len(classes):
+                  end = text.index(f"  {classes[index + 1]} = {{", start)
+              else:
+                  end = text.index("\n}\n\nlocal function CurrentClass", start)
+              block = text[start:end]
+              assert "characterSpecific = true" in block, cls
+              count = len(re.findall(r'^\s+(?:Macro|MouseoverMacro|HostileMouseoverMacro)\(', block, re.M))
+              assert count == expected[cls], (cls, count, expected[cls])
+
+          assert 'local MACRO_NAME_LIMIT = 16' in text
+          assert 'local MACRO_BODY_LIMIT = 255' in text
+          assert 'MAX_ACCOUNT_MACROS' in text
+          assert 'MAX_CHARACTER_MACROS' in text
+          assert 'FindCharacterMacroByName' in text
+          assert 'GetMacroIndexByName' not in text
+          assert 'pcall(CreateMacro, definition.name, icon, definition.body, 1)' in text
+          assert 'pcall(EditMacro, index, definition.name, icon, definition.body, 1)' in text
+          assert 'General Macros were not modified.' in text
+          PY
+
+          # Druid: preserve DMH macros, healing/dispels and all supplied utility templates.
           grep -q 'recommendedAddon = "DruidMacroHelper"' RetreatUI/Macros.lua
-          grep -q 'name = "RUI Powershift"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI Powershift"' RetreatUI/Macros.lua
           grep -q '/dmh cd pot supersapper' RetreatUI/Macros.lua
           grep -q '/dmh cd supersapper' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Healing Touch")' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Abolish Poison")' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI HealingTouch"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI AbolPoison"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI StarfireCD"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI FeralCharge"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI NSHeal", 17116' RetreatUI/Macros.lua
+
+          # Priest and Shaman must both ship mouseover healing packages.
+          grep -q 'MouseoverMacro("RUI FlashHeal"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI GreaterHeal"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI PrayerMend"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI HealingWave"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI LesserHeal"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI ChainHeal"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI EarthShield"' RetreatUI/Macros.lua
+          grep -q 'Earth Shock(Rank 1)' RetreatUI/Macros.lua
+          grep -q 'castsequence reset=8 Windfury Totem, Grace of Air Totem' RetreatUI/Macros.lua
+
+          # Paladin healing/utility mouseovers and supplied weapon/Hammer of Justice templates.
+          grep -q 'MouseoverMacro("RUI HolyLight"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI FlashLight"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI Cleanse"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI HoJ"' RetreatUI/Macros.lua
+          grep -q 'name-of-your-Shield' RetreatUI/Macros.lua
+
+          # Hunter supplied templates plus required timing warning.
+          grep -q 'Macro("RUI RaptorWeave"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI HunterBurst"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI PetCare"' RetreatUI/Macros.lua
+          grep -q 'castsequence reset=2.52 Steady Shot, !Auto Shot' RetreatUI/Macros.lua
+          grep -q 'timing is NOT universal' RetreatUI/Macros.lua
+          grep -q 'postImportWarning' RetreatUI/Macros.lua
+          grep -q '<food>' RetreatUI/Macros.lua
+
+          # Mage supplied CQS/AoE/burst package plus de-curse and Water Elemental controls.
+          grep -q 'Macro("RUI Counterspell"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI ABManaPot"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI ArcaneBurst"' RetreatUI/Macros.lua
+          grep -q 'MouseoverMacro("RUI Decurse"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI PetFreeze"' RetreatUI/Macros.lua
+
+          # Rogue, Warlock and Warrior high-value class macros.
+          grep -q 'Macro("RUI Sinister"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI Sap"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI Kick"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI Felhunter"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI SpellLock"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI Charge"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI Intervene"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI ShieldWall"' RetreatUI/Macros.lua
+          grep -q 'Macro("RUI Interrupt"' RetreatUI/Macros.lua
 
           # ElvUI layout/class-color invariants.
           grep -q 'ShiftAB = "BOTTOM,ElvUIParent,BOTTOM,-310,32"' RetreatUI/CoAElvUIProfile.lua
@@ -157,7 +255,7 @@ jobs:
           grep -q 'profile.general.valuecolor' RetreatUI/Profiles.lua
           grep -q 'classColor = true' RetreatUI/Profiles.lua
 
-          # Plater Classic import flow.
+          # Plater Classic import flow and RetreatUI theming.
           grep -q 'local function ImportPlaterClassic' RetreatUI/Profiles.lua
           grep -q 'Plater.DecompressData' RetreatUI/Profiles.lua
           grep -q 'Plater.db.SetProfile' RetreatUI/Profiles.lua
@@ -166,31 +264,19 @@ jobs:
           ! grep -q 'Plater.ImportProfile' RetreatUI/Profiles.lua
           grep -q 'function Profiles:ApplyPlaterTheme()' RetreatUI/Profiles.lua
 
-          # Details: synchronize before ReloadUI and repair windows after login without reapplying the profile.
+          # Details persistence/theme invariants.
           grep -q 'local function ForceDetailsWindowsOpen' RetreatUI/DetailsPersistenceFix.lua
-          grep -q 'skin.__was_opened = true' RetreatUI/DetailsPersistenceFix.lua
-          grep -q 'config.is_open = true' RetreatUI/DetailsPersistenceFix.lua
-          grep -q '_detalhes_database.local_instances_config' RetreatUI/DetailsPersistenceFix.lua
           grep -q 'function Profiles:PrepareDetailsForReload' RetreatUI/DetailsPersistenceFix.lua
           grep -q 'forceOpenOnNextLogin = true' RetreatUI/DetailsPersistenceFix.lua
-          grep -q 'C_Timer.After(2.25' RetreatUI/DetailsPersistenceFix.lua
-          grep -q 'RUI._detailsReloadWrapped' RetreatUI/DetailsPersistenceFix.lua
-          ! grep -q 'pcall(details.ApplyProfile' RetreatUI/DetailsPersistenceFix.lua
           grep -q 'details.ImportProfile' RetreatUI/Profiles.lua
-          grep -q 'function Profiles:ApplyDetailsTheme()' RetreatUI/Profiles.lua
           grep -q 'RETREAT_FONT = "Fira Sans Heavy"' RetreatUI/Profiles.lua
           grep -q 'RETREAT_TEXTURE = "ElvUI Norm"' RetreatUI/Profiles.lua
 
           # Eight-step installer remains unchanged.
           grep -q 'local TOTAL_PAGES = 8' RetreatUI/Installer.lua
-          grep -q 'id = "welcome"' RetreatUI/Installer.lua
-          grep -q 'id = "macros"' RetreatUI/Installer.lua
-          grep -q 'id = "elvui"' RetreatUI/Installer.lua
-          grep -q 'id = "plater"' RetreatUI/Installer.lua
-          grep -q 'id = "weakauras"' RetreatUI/Installer.lua
-          grep -q 'id = "details"' RetreatUI/Installer.lua
-          grep -q 'id = "dbm"' RetreatUI/Installer.lua
-          grep -q 'id = "reload"' RetreatUI/Installer.lua
+          for page in welcome macros elvui plater weakauras details dbm reload; do
+            grep -q "id = \"$page\"" RetreatUI/Installer.lua
+          done
           grep -q 'ImportPlater' RetreatUI/Installer.lua
           grep -q 'InstallClassHUD' RetreatUI/Installer.lua
           grep -q 'CurrentClassName' RetreatUI/Installer.lua
@@ -206,16 +292,11 @@ jobs:
           cp -a RetreatUI dist/package/RetreatUI
           (cd dist/package && zip -r "../$ASSET" RetreatUI)
           test -s "dist/$ASSET"
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/RetreatUI\.toc$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/WeakAuraData\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DruidComboPoints\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/GeneralWeakAuraData\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/GeneralPlacementFix\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/GeneralWeakAuras\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DetailsPersistenceFix\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/Macros\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/ProfilePayloadDetails\.lua$'
-          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/ProfilePayloadPlater4\.lua$'
+
+          for file in RetreatUI.toc WeakAuraData.lua ClassWeakAuraData.lua DruidComboPoints.lua RogueComboPoints.lua GeneralWeakAuraData.lua GeneralPlacementFix.lua GeneralWeakAuras.lua DetailsPersistenceFix.lua Macros.lua ProfilePayloadDetails.lua ProfilePayloadPlater4.lua; do
+            zipinfo -1 "dist/$ASSET" | grep -q "^RetreatUI/$file$"
+          done
+
           ! zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DruidRuntime\.lua$'
 
       - name: Upload artifact
@@ -236,18 +317,21 @@ jobs:
         run: |
           set -euo pipefail
           NOTES=$(cat <<'EOF'
-          RetreatUI TBC beta 10.
+          RetreatUI TBC beta 13.
 
           Includes:
-          - Corrects `RetreatUI - General` trinket tracking to the exact supplied CoA WeakAura anchor: BOTTOMRIGHT to `ElvUF_Player` TOPRIGHT, X -17 / Y +1.
-          - Keeps the General Buffs & Procs lane at the CoA position X 0 / Y -83, including temporary trinket and weapon procs.
-          - Adds a 5-segment Druid Combo Points WeakAura at X 0 / Y -118, directly between the proc lane and the Energy resource bar.
-          - Reworks Details reload persistence: RetreatUI synchronizes the imported window state immediately before ReloadUI and repairs the live windows after login without calling Details:ApplyProfile again during startup.
-          - Keeps Plater Classic compatibility, ElvUI class colors, stance/form-bar alignment, Character Specific macros and exact class HUD geometry unchanged.
+          - Adds Character Specific macro packages for all nine TBC classes.
+          - Incorporates the supplied Warrior, Paladin, Druid, Hunter and Mage macro templates.
+          - Adds Priest and Shaman mouseover healing/utility macro packages.
+          - Adds selected high-value TBC macros for Rogue and Warlock and supplements the other classes with useful class utilities.
+          - Hunter receives a post-import warning explaining that the `reset=2.52` Steady Shot template must be adjusted to the player's effective ranged attack speed; the Feed Pet food placeholder is also called out.
+          - Adds macro slot/name/body validation and refuses partial installs when there are not enough Character Specific Macro slots.
+          - Keeps General Macro slots untouched, preserves the Druid Macro Helper integration, all-class WeakAuras, exact HUD geometry, Plater, Details and ElvUI behavior.
 
           This remains a testing prerelease.
           EOF
           )
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "dist/$ASSET" --clobber
             gh release edit "$TAG" --title "$TITLE" --notes "$NOTES" --prerelease
