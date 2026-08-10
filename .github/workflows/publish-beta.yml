@@ -67,29 +67,51 @@ jobs:
           test -f RetreatUI/RetreatUI.toc
           grep -q "^## Author: Retreat$" RetreatUI/RetreatUI.toc
           grep -q "^## Version: $VERSION$" RetreatUI/RetreatUI.toc
-          for file in Core.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Installer.lua; do
+          for file in Core.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Macros.lua Installer.lua; do
             test -s "RetreatUI/$file"
           done
-          ! test -e RetreatUI/DruidRuntime.lua
           grep -q '^WeakAuraData.lua$' RetreatUI/RetreatUI.toc
+          grep -q '^WeakAuras.lua$' RetreatUI/RetreatUI.toc
+          grep -q '^Macros.lua$' RetreatUI/RetreatUI.toc
+          ! test -e RetreatUI/DruidRuntime.lua
           ! grep -q '^DruidRuntime.lua$' RetreatUI/RetreatUI.toc
           ! grep -R 'weakAuraPayloads\|WeakAuras.Import' RetreatUI
-          grep -q 'type(WeakAuras.Add) == "function"' RetreatUI/WeakAuras.lua
-          grep -q 'VerifyDruidHUD' RetreatUI/WeakAuras.lua
+
+          # WeakAuras must resolve only the current class package.
+          grep -q 'local function CurrentPackage' RetreatUI/WeakAuras.lua
+          grep -q 'function WeakAurasModule:InstallClassHUD' RetreatUI/WeakAuras.lua
+          grep -q 'function WeakAurasModule:IsClassSupported' RetreatUI/WeakAuras.lua
           grep -q 'COA_RESOURCE_X, COA_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
           grep -q 'COA_MAIN_X, COA_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
           grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
-          grep -q 'COA_RESOURCE_WIDTH, COA_RESOURCE_HEIGHT = 360, 16' RetreatUI/WeakAuraData.lua
-          grep -q 'COA_MAIN_ICON, COA_UTILITY_ICON = 38, 32' RetreatUI/WeakAuraData.lua
-          grep -q '33987' RetreatUI/WeakAuraData.lua
+
+          # Druid macro package and DMH recommendation.
+          grep -q 'recommendedAddon = "DruidMacroHelper"' RetreatUI/Macros.lua
+          grep -q 'name = "RUI Powershift"' RetreatUI/Macros.lua
+          grep -q 'name = "RUI HasteSapper"' RetreatUI/Macros.lua
+          grep -q '/dmh cd pot supersapper' RetreatUI/Macros.lua
+          grep -q 'name = "RUI SuperSapper"' RetreatUI/Macros.lua
+          grep -q '/dmh cd supersapper' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Healing Touch")' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Regrowth")' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Rejuvenation")' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Lifebloom")' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Swiftmend")' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Remove Curse")' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Cure Poison")' RetreatUI/Macros.lua
+          grep -q 'MouseoverSpell("Abolish Poison")' RetreatUI/Macros.lua
+
+          # Seven-step installer with class-aware macro / WA pages.
           grep -q 'local TOTAL_PAGES = 7' RetreatUI/Installer.lua
-          grep -q 'title = "WELCOME"' RetreatUI/Installer.lua
-          grep -q 'title = "IMPORT MACROS"' RetreatUI/Installer.lua
-          grep -q 'title = "IMPORT ELVUI"' RetreatUI/Installer.lua
-          grep -q 'title = "IMPORT WEAKAURAS"' RetreatUI/Installer.lua
-          grep -q 'title = "IMPORT DETAILS"' RetreatUI/Installer.lua
-          grep -q 'title = "IMPORT DBM"' RetreatUI/Installer.lua
-          grep -q 'title = "RELOAD"' RetreatUI/Installer.lua
+          grep -q 'id = "welcome"' RetreatUI/Installer.lua
+          grep -q 'id = "macros"' RetreatUI/Installer.lua
+          grep -q 'id = "elvui"' RetreatUI/Installer.lua
+          grep -q 'id = "weakauras"' RetreatUI/Installer.lua
+          grep -q 'id = "details"' RetreatUI/Installer.lua
+          grep -q 'id = "dbm"' RetreatUI/Installer.lua
+          grep -q 'id = "reload"' RetreatUI/Installer.lua
+          grep -q 'InstallClassHUD' RetreatUI/Installer.lua
+          grep -q 'CurrentClassName' RetreatUI/Installer.lua
           ! grep -R "OpenAI\|ChatGPT" RetreatUI
 
       - name: Package
@@ -105,6 +127,7 @@ jobs:
           test -s "dist/$ASSET"
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/RetreatUI\.toc$'
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/WeakAuraData\.lua$'
+          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/Macros\.lua$'
           ! zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DruidRuntime\.lua$'
 
       - name: Upload artifact
@@ -125,15 +148,14 @@ jobs:
         run: |
           set -euo pipefail
           NOTES=$(cat <<'EOF'
-          RetreatUI TBC beta 5.
+          RetreatUI TBC beta 6.
 
           Includes:
-          - Replaces the old single-page installer with a seven-step guided wizard.
-          - Installer flow: Welcome → Import Macros → Import ElvUI → Import WeakAuras → Import Details → Import DBM → Reload.
-          - ElvUI, WeakAuras and Details are imported individually on their own pages.
-          - WeakAuras continues to install and verify the Druid HUD using the exact RetreatUI CoA center-HUD geometry.
-          - Macro and DBM pages are already wired for their dedicated modules and clearly report unavailable instead of claiming success when those payloads are not embedded yet.
-          - The installer only marks setup complete when the user finishes on the Reload page.
+          - Macro and WeakAuras imports are now class-specific and only use the package matching the character being played.
+          - Druid now ships with the existing powershift macro, two Druid Macro Helper Haste/Sapper macros, and mouseover macros for Healing Touch, Regrowth, Rejuvenation, Lifebloom, Swiftmend, Remove Curse, Cure Poison and Abolish Poison.
+          - Druid Macro Helper is listed as a recommended optional dependency and the installer reports whether DMH is loaded.
+          - The Druid WeakAuras package remains the only current class HUD package and is never offered to non-Druids.
+          - The seven-step guided installer remains Welcome → Macros → ElvUI → WeakAuras → Details → DBM → Reload.
 
           This remains a testing prerelease.
           EOF
