@@ -2,7 +2,7 @@
 ## Title: RetreatUI
 ## Notes: RetreatUI installer, profiles and class-specific plus General WeakAuras/macros for The Burning Crusade Classic Anniversary.
 ## Author: Retreat
-## Version: 0.1.0-beta.9
+## Version: 0.1.0-beta.10
 ## SavedVariables: RetreatUITBCDB
 ## OptionalDeps: ElvUI, Plater, Details, WeakAuras, DBM-Core, DruidMacroHelper
 ## DefaultState: Enabled
@@ -17,7 +17,9 @@ ProfilePayloadDetails.lua
 Profiles.lua
 DetailsPersistenceFix.lua
 WeakAuraData.lua
+DruidComboPoints.lua
 GeneralWeakAuraData.lua
+GeneralPlacementFix.lua
 WeakAuras.lua
 GeneralWeakAuras.lua
 Macros.lua
