@@ -45,6 +45,19 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "asset=RetreatUI_TBC_v$VERSION.zip" >> "$GITHUB_OUTPUT"
 
+      - name: Install Lua 5.1 compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+
+      - name: Validate Lua syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find RetreatUI -type f -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+
       - name: Validate addon
         shell: bash
         env:
