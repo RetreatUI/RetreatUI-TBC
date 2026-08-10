@@ -53,7 +53,7 @@ jobs:
           grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
           grep -q 'COA_RESOURCE_WIDTH, COA_RESOURCE_HEIGHT = 360, 16' RetreatUI/WeakAuraData.lua
           grep -q 'COA_MAIN_ICON, COA_UTILITY_ICON = 38, 32' RetreatUI/WeakAuraData.lua
-          grep -q 'COA_SPACING = 1' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_ICON_SPACING = 1' RetreatUI/WeakAuraData.lua
 
           # Every other TBC class must use the exact same geometry.
           grep -q 'RESOURCE_X, RESOURCE_Y = 0, -152' RetreatUI/ClassWeakAuraData.lua
