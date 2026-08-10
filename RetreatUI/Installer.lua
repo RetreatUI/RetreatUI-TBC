@@ -45,6 +45,16 @@ local function SetButtonEnabled(button, enabled)
   end
 end
 
+local function CurrentClassName()
+  local localized, class = UnitClass("player")
+  return localized or class or "Class"
+end
+
+local function ResolveText(value)
+  if type(value) == "function" then return value() end
+  return value or ""
+end
+
 local function PageResult(pageId, text, success)
   if not frame then return end
   frame.pageResults = frame.pageResults or {}
@@ -53,19 +63,18 @@ end
 
 local function MacroReady()
   local module = RUI.modules.macros
-  if module and type(module.IsReady) == "function" then
-    local ok, ready, message = pcall(module.IsReady, module)
-    if ok and ready then return true, message or "READY" end
-    if ok then return false, message or "MACRO PACKAGE NOT READY" end
+  if not module or type(module.IsReady) ~= "function" then
+    return false, "NO " .. string.upper(CurrentClassName()) .. " MACRO PACKAGE"
   end
-  if module and type(module.Import) == "function" then return true, "READY" end
-  return false, "MACRO PACKAGE NOT EMBEDDED YET"
+  local ok, ready, message = pcall(module.IsReady, module)
+  if not ok then return false, tostring(ready) end
+  return ready == true, message or (ready and "READY" or "MACRO PACKAGE NOT READY")
 end
 
 local function ImportMacros()
   local module = RUI.modules.macros
   if not module or type(module.Import) ~= "function" then
-    return false, "Macro package is not embedded in this beta yet."
+    return false, "No RetreatUI macro package exists for " .. CurrentClassName() .. "."
   end
   return module:Import()
 end
@@ -86,22 +95,22 @@ end
 
 local function WeakAurasReady()
   if not RUI:IsAddonLoaded("WeakAuras") then return false, "WEAKAURAS NOT LOADED" end
-  if RUI:GetPlayerClass() ~= "DRUID" then return false, "DRUID PACKAGE ONLY" end
   local wa = RUI.modules.weakauras
-  local ready = wa and wa.IsAvailable and wa:IsAvailable() and wa.IsClassSupported and wa:IsClassSupported()
-  return ready == true, ready and "READY — INSTALL + VERIFY" or "WEAKAURAS PACKAGE NOT READY"
+  if not wa or not wa.IsAvailable or not wa:IsAvailable() then return false, "WEAKAURAS API NOT READY" end
+  if not wa.IsClassSupported or not wa:IsClassSupported() then
+    return false, "NO " .. string.upper(CurrentClassName()) .. " WEAKAURAS PACKAGE"
+  end
+  return true, "READY — " .. string.upper(CurrentClassName()) .. " ONLY — INSTALL + VERIFY"
 end
 
 local function ImportWeakAuras()
   local wa = RUI.modules.weakauras
-  if not wa or type(wa.InstallDruidHUD) ~= "function" then return false, "WeakAuras package module is missing." end
-  return wa:InstallDruidHUD()
+  if not wa or type(wa.InstallClassHUD) ~= "function" then return false, "WeakAuras class package module is missing." end
+  return wa:InstallClassHUD()
 end
 
 local function DetailsReady()
-  if not RUI:IsAddonLoaded("Details") and not _G.Details and not _G._detalhes then
-    return false, "DETAILS NOT LOADED"
-  end
+  if not RUI:IsAddonLoaded("Details") and not _G.Details and not _G._detalhes then return false, "DETAILS NOT LOADED" end
   local profiles = RUI.modules.profiles
   if not profiles or type(profiles.ApplyDetails) ~= "function" then return false, "DETAILS PROFILE MODULE MISSING" end
   return true, "READY"
@@ -127,9 +136,7 @@ end
 
 local function ImportDBM()
   local module = RUI.modules.dbm
-  if not module or type(module.Apply) ~= "function" then
-    return false, "DBM profile is not embedded in this beta yet."
-  end
+  if not module or type(module.Apply) ~= "function" then return false, "DBM profile is not embedded in this beta yet." end
   return module:Apply()
 end
 
@@ -138,13 +145,13 @@ local PAGES = {
     id = "welcome",
     title = "WELCOME",
     subtitle = "Welcome to RetreatUI for The Burning Crusade.",
-    description = "This installer will guide you through each part of the setup one page at a time. You can import the components you use and skip anything that is not available on this client.",
+    description = "This installer will guide you through each part of the setup one page at a time. Class-specific components are automatically matched to the class you are currently playing.",
   },
   {
     id = "macros",
-    title = "IMPORT MACROS",
-    subtitle = "Install the RetreatUI macro package.",
-    description = "This page imports the class and utility macros included with RetreatUI. Existing macros should only be changed by the macro package itself.",
+    title = function() return "IMPORT " .. string.upper(CurrentClassName()) .. " MACROS" end,
+    subtitle = function() return "Install only the RetreatUI macros for " .. CurrentClassName() .. "." end,
+    description = function() return "RetreatUI detects your current class and only imports that class package. For Druid this includes the RUI Powershift macro; no macros from other classes are created." end,
     button = "IMPORT MACROS",
     ready = MacroReady,
     action = ImportMacros,
@@ -153,16 +160,16 @@ local PAGES = {
     id = "elvui",
     title = "IMPORT ELVUI",
     subtitle = "Install the RetreatUI ElvUI layout.",
-    description = "Creates and activates the RetreatUI ElvUI profile, including the player and target frame layout used by the central WeakAuras HUD.",
+    description = "Creates and activates the shared RetreatUI ElvUI profile, including the player and target frame layout used by the central WeakAuras HUD.",
     button = "IMPORT ELVUI",
     ready = ElvUIReady,
     action = ImportElvUI,
   },
   {
     id = "weakauras",
-    title = "IMPORT WEAKAURAS",
-    subtitle = "Install and verify the RetreatUI class HUD.",
-    description = "Creates the RetreatUI Druid WeakAuras package and verifies the full hierarchy and HUD positions after installation.",
+    title = function() return "IMPORT " .. string.upper(CurrentClassName()) .. " WEAKAURAS" end,
+    subtitle = function() return "Install and verify only the RetreatUI WeakAuras package for " .. CurrentClassName() .. "." end,
+    description = "RetreatUI detects the current class and only installs its matching WeakAuras HUD. It never imports another class package into this character.",
     button = "IMPORT WEAKAURAS",
     ready = WeakAurasReady,
     action = ImportWeakAuras,
@@ -171,7 +178,7 @@ local PAGES = {
     id = "details",
     title = "IMPORT DETAILS",
     subtitle = "Install the RetreatUI Details profile.",
-    description = "Applies the RetreatUI Details appearance and typography so the meter matches the rest of the UI.",
+    description = "Applies the shared RetreatUI Details appearance and typography so the meter matches the rest of the UI.",
     button = "IMPORT DETAILS",
     ready = DetailsReady,
     action = ImportDetails,
@@ -180,7 +187,7 @@ local PAGES = {
     id = "dbm",
     title = "IMPORT DBM",
     subtitle = "Install the RetreatUI DBM profile.",
-    description = "Applies the RetreatUI DBM profile when the DBM package is available and loaded.",
+    description = "Applies the shared RetreatUI DBM profile when the DBM package is available and loaded.",
     button = "IMPORT DBM",
     ready = DBMReady,
     action = ImportDBM,
@@ -214,9 +221,9 @@ local function RefreshPage()
   local page = PAGES[index]
 
   frame.progress:SetText(string.format("STEP %d OF %d", index, TOTAL_PAGES))
-  frame.pageTitle:SetText(page.title)
-  frame.pageSubtitle:SetText(page.subtitle)
-  frame.description:SetText(page.description)
+  frame.pageTitle:SetText(ResolveText(page.title))
+  frame.pageSubtitle:SetText(ResolveText(page.subtitle))
+  frame.description:SetText(ResolveText(page.description))
 
   if index > 1 then frame.back:Show() else frame.back:Hide() end
   if index < TOTAL_PAGES then frame.next:Show() else frame.next:Hide() end
@@ -232,11 +239,8 @@ local function RefreshPage()
   local saved = frame.pageResults and frame.pageResults[page.id]
   if saved then
     SetStatus(saved.text, saved.success)
-    SetButtonEnabled(frame.action, true)
-    if page.ready then
-      local ready = page.ready()
-      SetButtonEnabled(frame.action, ready == true)
-    end
+    local ready = page.ready and select(1, page.ready()) or true
+    SetButtonEnabled(frame.action, ready == true)
   elseif page.reload then
     SetStatus("Ready to reload.", true)
     SetButtonEnabled(frame.action, true)

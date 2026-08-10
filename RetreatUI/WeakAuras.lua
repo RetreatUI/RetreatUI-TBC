@@ -10,23 +10,24 @@ local function Available()
     and type(WeakAuras.GetData) == "function"
 end
 
+local function CurrentPackage()
+  local class = RUI:GetPlayerClass()
+  local key = class and class:lower()
+  local package = key and RUI.weakAuraPackages and RUI.weakAuraPackages[key] or nil
+  return class, package
+end
+
 local function PreserveUID(data)
   local existing = WeakAuras.GetData(data.id)
-  if existing and existing.uid then
-    data.uid = existing.uid
-  end
+  if existing and existing.uid then data.uid = existing.uid end
   return data
 end
 
 local function AddDisplay(data)
   local ok, err = pcall(WeakAuras.Add, PreserveUID(data))
-  if not ok then
-    return false, tostring(err)
-  end
+  if not ok then return false, tostring(err) end
   local installed = WeakAuras.GetData(data.id)
-  if not installed then
-    return false, data.id .. " was not present after WeakAuras.Add"
-  end
+  if not installed then return false, data.id .. " was not present after WeakAuras.Add" end
   return true
 end
 
@@ -34,36 +35,38 @@ function WeakAurasModule:IsAvailable()
   return Available()
 end
 
+function WeakAurasModule:GetClassPackage()
+  return CurrentPackage()
+end
+
 function WeakAurasModule:IsClassSupported()
-  return RUI:GetPlayerClass() == "DRUID"
-    and RUI.weakAuraPackages
-    and type(RUI.weakAuraPackages.druid) == "table"
-    and type(RUI.weakAuraPackages.druid.Build) == "function"
+  local class, package = CurrentPackage()
+  return class ~= nil and type(package) == "table" and type(package.Build) == "function"
 end
 
 function WeakAurasModule:GetStatus()
+  local class = RUI:GetPlayerClass()
   return {
     available = Available(),
-    druid = self:IsClassSupported(),
+    class = class,
+    supported = self:IsClassSupported(),
   }
 end
 
-function WeakAurasModule:VerifyDruidHUD(packageData)
+function WeakAurasModule:VerifyClassHUD(packageData)
   if not Available() then return false, "WeakAuras is not loaded" end
-  local package = RUI.weakAuraPackages and RUI.weakAuraPackages.druid
-  if not package then return false, "Druid WeakAuras package is missing" end
+  local class, package = CurrentPackage()
+  if not package then return false, "No WeakAuras package is available for " .. tostring(class or "this class") end
 
   packageData = packageData or package:Build()
   if type(packageData) ~= "table" or type(packageData.expected) ~= "table" then
-    return false, "Druid WeakAuras package returned invalid data"
+    return false, tostring(class or "Class") .. " WeakAuras package returned invalid data"
   end
 
   for rootId, geometry in pairs(packageData.expected) do
     local data = WeakAuras.GetData(rootId)
     if not data then return false, rootId .. " is missing" end
-    if data.regionType ~= "dynamicgroup" then
-      return false, rootId .. " is not a dynamic group"
-    end
+    if data.regionType ~= "dynamicgroup" then return false, rootId .. " is not a dynamic group" end
     if data.anchorFrameType ~= "SCREEN" or data.anchorPoint ~= "CENTER" or data.selfPoint ~= "CENTER" then
       return false, rootId .. " is not anchored to screen center"
     end
@@ -76,26 +79,25 @@ function WeakAurasModule:VerifyDruidHUD(packageData)
   for _, data in ipairs(packageData.displays or {}) do
     local installed = WeakAuras.GetData(data.id)
     if not installed then return false, data.id .. " is missing" end
-    if installed.parent ~= data.parent then
-      return false, data.id .. " has the wrong parent"
-    end
+    if installed.parent ~= data.parent then return false, data.id .. " has the wrong parent" end
   end
 
-  return true, "Druid HUD verified"
+  return true, tostring(class or "Class") .. " HUD verified"
 end
 
-function WeakAurasModule:InstallDruidHUD()
+function WeakAurasModule:InstallClassHUD()
   if not Available() then return false, "WeakAuras is not loaded" end
-  if not self:IsClassSupported() then return false, "No Druid WeakAuras package is available" end
-
-  local package = RUI.weakAuraPackages.druid
-  local packageData = package:Build()
-  if not packageData or type(packageData.roots) ~= "table" or type(packageData.displays) ~= "table" then
-    return false, "Druid WeakAuras package returned invalid data"
+  local class, package = CurrentPackage()
+  if not package or type(package.Build) ~= "function" then
+    return false, "No RetreatUI WeakAuras package exists for " .. tostring(class or "this class") .. "."
   end
 
-  -- Add roots once so every child has a valid parent, then add the children and
-  -- finally re-add the roots with their complete controlledChildren ordering.
+  local packageData = package:Build()
+  if not packageData or type(packageData.roots) ~= "table" or type(packageData.displays) ~= "table" then
+    return false, tostring(class or "Class") .. " WeakAuras package returned invalid data"
+  end
+
+  -- Seed parents first, then children, then restore final child ordering.
   for _, root in ipairs(packageData.roots) do
     local seed = {}
     for key, value in pairs(root) do seed[key] = value end
@@ -114,20 +116,35 @@ function WeakAurasModule:InstallDruidHUD()
     if not ok then return false, err end
   end
 
-  if type(WeakAuras.ScanForLoads) == "function" then
-    pcall(WeakAuras.ScanForLoads)
-  end
+  if type(WeakAuras.ScanForLoads) == "function" then pcall(WeakAuras.ScanForLoads) end
 
-  local verified, message = self:VerifyDruidHUD(packageData)
+  local verified, message = self:VerifyClassHUD(packageData)
   if not verified then return false, message end
-  return true, "installed and verified"
+
+  local db = RUI:EnsureDB()
+  db.integrations = db.integrations or {}
+  db.integrations.weakauras = db.integrations.weakauras or {}
+  db.integrations.weakauras[class] = { installed = true, version = RUI.version }
+
+  return true, tostring(class) .. " WeakAuras installed and verified"
+end
+
+-- Compatibility aliases for beta.4/beta.5 callers.
+function WeakAurasModule:VerifyDruidHUD(packageData)
+  return self:VerifyClassHUD(packageData)
+end
+
+function WeakAurasModule:InstallDruidHUD()
+  if RUI:GetPlayerClass() ~= "DRUID" then return false, "Druid package is only available to Druids" end
+  return self:InstallClassHUD()
 end
 
 function WeakAurasModule:InstallSelected()
   local db = RUI:EnsureDB()
   local results = {}
-  if db.selected.classWA and RUI:GetPlayerClass() == "DRUID" then
-    results.druidHUD = { self:InstallDruidHUD() }
+  if db.selected.classWA and self:IsClassSupported() then
+    local class = RUI:GetPlayerClass() or "class"
+    results[class:lower() .. "HUD"] = { self:InstallClassHUD() }
   end
   return results
 end
