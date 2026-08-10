@@ -16,10 +16,9 @@ local SWING_X, SWING_Y = 0, -142
 local SWING_WIDTH, SWING_HEIGHT = 360, 5
 local SWING_SPACING = 1
 
--- WeakAuras TBC class/spec IDs. Using class_and_spec means the Load tab shows
--- the exact checked specs instead of loading this aura on caster/healer specs
--- and hiding it later in custom trigger code.
-local ACTIVE_SPECS = {
+-- WeakAuras TBC class/spec IDs. class_and_spec produces real checked specs in
+-- WeakAuras' Load tab; caster/healer specs are not loaded and then hidden later.
+local MELEE_SPECS = {
   -- Warrior: Arms / Fury / Protection
   [71] = true,
   [72] = true,
@@ -32,11 +31,6 @@ local ACTIVE_SPECS = {
   -- Druid: Feral Combat
   [103] = true,
 
-  -- Hunter: Beast Mastery / Marksmanship / Survival
-  [253] = true,
-  [254] = true,
-  [255] = true,
-
   -- Rogue: Assassination / Combat / Subtlety
   [259] = true,
   [260] = true,
@@ -45,6 +39,31 @@ local ACTIVE_SPECS = {
   -- Shaman: Enhancement
   [263] = true,
 }
+
+local OFFHAND_SPECS = {
+  -- Warrior may dual wield; the trigger hides itself when no off-hand speed exists.
+  [71] = true,
+  [72] = true,
+  [73] = true,
+
+  -- Rogue
+  [259] = true,
+  [260] = true,
+  [261] = true,
+
+  -- Enhancement Shaman
+  [263] = true,
+}
+
+local HUNTER_SPECS = {
+  [253] = true, -- Beast Mastery
+  [254] = true, -- Marksmanship
+  [255] = true, -- Survival
+}
+
+local ACTIVE_SPECS = {}
+for specID in pairs(MELEE_SPECS) do ACTIVE_SPECS[specID] = true end
+for specID in pairs(HUNTER_SPECS) do ACTIVE_SPECS[specID] = true end
 
 local function InternalVersion()
   if WeakAuras and type(WeakAuras.InternalVersion) == "function" then
@@ -58,9 +77,9 @@ local function TocVersion()
   return toc or 20506
 end
 
-local function SwingLoad()
+local function SwingLoad(specs)
   local multi = {}
-  for specID, enabled in pairs(ACTIVE_SPECS) do
+  for specID, enabled in pairs(specs or ACTIVE_SPECS) do
     multi[specID] = enabled
   end
   return {
@@ -70,7 +89,7 @@ local function SwingLoad()
   }
 end
 
-local function Base(id, parent)
+local function Base(id, parent, specs)
   return {
     id = id,
     parent = parent,
@@ -90,7 +109,7 @@ local function Base(id, parent)
     conditions = {},
     config = {},
     information = {},
-    load = SwingLoad(),
+    load = SwingLoad(specs),
     alpha = 1,
     frameStrata = 1,
   }
@@ -183,6 +202,17 @@ function(allstates, event, unit)
     return Hide()
   end
 
+  if event == "UPDATE_SHAPESHIFT_FORM" then
+    local _, class = UnitClass("player")
+    if class == "DRUID" then
+      local powerType = UnitPowerType("player")
+      if powerType ~= 1 and powerType ~= 3 then
+        return Hide()
+      end
+    end
+    return false
+  end
+
   if event == "UNIT_ATTACK_SPEED" or event == "UNIT_RANGEDDAMAGE"
     or event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_INVENTORY_CHANGED" then
     return Rescale()
@@ -249,8 +279,8 @@ end
   }
 end
 
-local function SwingBar(id, kind, color)
-  local data = Base(id, ROOT)
+local function SwingBar(id, kind, color, specs)
+  local data = Base(id, ROOT, specs)
   data.regionType = "aurabar"
   data.width = SWING_WIDTH
   data.height = SWING_HEIGHT
@@ -285,7 +315,7 @@ local function SwingBar(id, kind, color)
 end
 
 local function SwingGroup(children)
-  local data = Base(ROOT, "RetreatUI - General")
+  local data = Base(ROOT, "RetreatUI - General", ACTIVE_SPECS)
   data.regionType = "dynamicgroup"
   data.controlledChildren = children
   data.anchorFrameType = "SCREEN"
@@ -332,9 +362,9 @@ function PACKAGE:Build()
 
   packageData.root.controlledChildren[#packageData.root.controlledChildren + 1] = ROOT
   packageData.groups[#packageData.groups + 1] = group
-  packageData.displays[#packageData.displays + 1] = SwingBar(MAIN_ID, "main", { 0.95, 0.58, 0.12, 1 })
-  packageData.displays[#packageData.displays + 1] = SwingBar(OFF_ID, "off", { 0.68, 0.70, 0.74, 1 })
-  packageData.displays[#packageData.displays + 1] = SwingBar(RANGED_ID, "ranged", { 0.36, 0.78, 0.42, 1 })
+  packageData.displays[#packageData.displays + 1] = SwingBar(MAIN_ID, "main", { 0.95, 0.58, 0.12, 1 }, MELEE_SPECS)
+  packageData.displays[#packageData.displays + 1] = SwingBar(OFF_ID, "off", { 0.68, 0.70, 0.74, 1 }, OFFHAND_SPECS)
+  packageData.displays[#packageData.displays + 1] = SwingBar(RANGED_ID, "ranged", { 0.36, 0.78, 0.42, 1 }, HUNTER_SPECS)
 
   packageData.expected.swing = ROOT
   packageData.expected.swingX = SWING_X
@@ -343,6 +373,12 @@ function PACKAGE:Build()
   packageData.expected.swingHeight = SWING_HEIGHT
   packageData.expected.swingSpacing = SWING_SPACING
   packageData.expected.swingSpecs = ACTIVE_SPECS
+  packageData.expected.meleeSwingSpecs = MELEE_SPECS
+  packageData.expected.offhandSwingSpecs = OFFHAND_SPECS
+  packageData.expected.hunterSwingSpecs = HUNTER_SPECS
+  packageData.expected.swingMain = MAIN_ID
+  packageData.expected.swingOff = OFF_ID
+  packageData.expected.swingRanged = RANGED_ID
 
   return packageData
 end
