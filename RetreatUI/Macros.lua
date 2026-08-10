@@ -4,15 +4,83 @@ if not RUI then return end
 local Macros = {}
 RUI:RegisterModule("macros", Macros)
 
+local function MouseoverSpell(spell)
+  return "#showtooltip " .. spell .. "\n/cast [@mouseover,help,nodead][help,nodead][@player] " .. spell
+end
+
 local PACKAGES = {
   DRUID = {
     displayName = "Druid",
+    recommendedAddon = "DruidMacroHelper",
+    recommendation = "Druid Macro Helper (DMH) is recommended for safe powershifting and is required by the Haste/Sapper macros.",
     macros = {
       {
         name = "RUI Powershift",
         iconSpellId = 768,
         perCharacter = true,
-        body = "#showtooltip\n/cancelaura Cat Form\n/cast !Cat Form",
+        body = "#showtooltip Cat Form\n/cancelaura Cat Form\n/cast !Cat Form",
+      },
+      {
+        name = "RUI HasteSapper",
+        iconSpellId = 9634,
+        perCharacter = true,
+        requiresAddon = "DruidMacroHelper",
+        body = "#showtooltip\n/dmh cd pot supersapper\n/dmh start\n/use Haste Potion\n/use Super Sapper Charge\n/cast !Dire Bear Form\n/dmh end",
+      },
+      {
+        name = "RUI SuperSapper",
+        iconSpellId = 9634,
+        perCharacter = true,
+        requiresAddon = "DruidMacroHelper",
+        body = "#showtooltip\n/dmh cd supersapper\n/dmh start\n/use Super Sapper Charge\n/cast !Dire Bear Form\n/dmh end",
+      },
+      {
+        name = "RUI HealingTouch",
+        iconSpellId = 26979,
+        perCharacter = true,
+        body = MouseoverSpell("Healing Touch"),
+      },
+      {
+        name = "RUI Regrowth",
+        iconSpellId = 26980,
+        perCharacter = true,
+        body = MouseoverSpell("Regrowth"),
+      },
+      {
+        name = "RUI Rejuvenate",
+        iconSpellId = 26982,
+        perCharacter = true,
+        body = MouseoverSpell("Rejuvenation"),
+      },
+      {
+        name = "RUI Lifebloom",
+        iconSpellId = 33763,
+        perCharacter = true,
+        body = MouseoverSpell("Lifebloom"),
+      },
+      {
+        name = "RUI Swiftmend",
+        iconSpellId = 18562,
+        perCharacter = true,
+        body = MouseoverSpell("Swiftmend"),
+      },
+      {
+        name = "RUI RemoveCurse",
+        iconSpellId = 2782,
+        perCharacter = true,
+        body = MouseoverSpell("Remove Curse"),
+      },
+      {
+        name = "RUI CurePoison",
+        iconSpellId = 8946,
+        perCharacter = true,
+        body = MouseoverSpell("Cure Poison"),
+      },
+      {
+        name = "RUI AbolPoison",
+        iconSpellId = 2893,
+        perCharacter = true,
+        body = MouseoverSpell("Abolish Poison"),
       },
     },
   },
@@ -31,6 +99,18 @@ function Macros:GetClassPackage()
   return GetPackage()
 end
 
+function Macros:GetRecommendation()
+  local _, package = GetPackage()
+  if not package or not package.recommendedAddon then return nil end
+  return package.recommendedAddon, package.recommendation
+end
+
+function Macros:IsRecommendedAddonLoaded()
+  local addon = self:GetRecommendation()
+  if not addon then return true end
+  return RUI:IsAddonLoaded(addon)
+end
+
 function Macros:IsReady()
   local class, package = GetPackage()
   if not class then return false, "PLAYER CLASS NOT AVAILABLE" end
@@ -40,7 +120,14 @@ function Macros:IsReady()
   if type(CreateMacro) ~= "function" or type(EditMacro) ~= "function" or type(GetMacroIndexByName) ~= "function" then
     return false, "MACRO API NOT AVAILABLE"
   end
-  return true, string.format("READY — %s (%d MACRO%s)", package.displayName or class, #package.macros, #package.macros == 1 and "" or "S")
+
+  local message = string.format("READY — %s (%d MACROS)", package.displayName or class, #package.macros)
+  if package.recommendedAddon and not RUI:IsAddonLoaded(package.recommendedAddon) then
+    message = message .. " — DMH RECOMMENDED / NOT LOADED"
+  elseif package.recommendedAddon then
+    message = message .. " — DMH LOADED"
+  end
+  return true, message
 end
 
 local function MacroIcon(definition)
@@ -93,5 +180,9 @@ function Macros:Import()
   db.integrations.macros = db.integrations.macros or {}
   db.integrations.macros[class] = { installed = true, version = RUI.version, count = installed }
 
-  return true, string.format("%s macros installed (%d).", package.displayName or class, installed)
+  local message = string.format("%s macros installed (%d).", package.displayName or class, installed)
+  if package.recommendedAddon and not RUI:IsAddonLoaded(package.recommendedAddon) then
+    message = message .. " Install/enable Druid Macro Helper before using the DMH Haste/Sapper macros."
+  end
+  return true, message
 end
