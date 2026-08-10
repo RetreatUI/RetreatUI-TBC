@@ -78,6 +78,38 @@ function WeakAurasModule:VerifyGeneral(packageData)
     return false, "RetreatUI - General Buffs & Procs is not at the CoA aura-tracker position"
   end
 
+  if expected.swing then
+    local swing = WeakAuras.GetData(expected.swing)
+    if not swing or swing.regionType ~= "dynamicgroup" then
+      return false, "RetreatUI - General Swing Timer group is missing"
+    end
+    if swing.anchorFrameType ~= "SCREEN"
+      or swing.anchorPoint ~= "CENTER"
+      or swing.selfPoint ~= "BOTTOM"
+      or swing.grow ~= "UP"
+      or math.abs((tonumber(swing.xOffset) or 0) - expected.swingX) > 0.01
+      or math.abs((tonumber(swing.yOffset) or 0) - expected.swingY) > 0.01
+      or math.abs((tonumber(swing.space) or 0) - expected.swingSpacing) > 0.01 then
+      return false, "RetreatUI - General Swing Timer is not in the resource-adjacent lane"
+    end
+
+    local load = swing.load or {}
+    local selected = load.class_and_spec and load.class_and_spec.multi or {}
+    if load.use_class_and_spec ~= false then
+      return false, "RetreatUI - General Swing Timer is not using multi-spec Load checks"
+    end
+    for specID, enabled in pairs(expected.swingSpecs or {}) do
+      if enabled and selected[specID] ~= true then
+        return false, "RetreatUI - General Swing Timer is missing spec " .. tostring(specID)
+      end
+    end
+    for _, excluded in ipairs({ 65, 102, 105, 262, 264, 256, 257, 258, 62, 63, 64, 265, 266, 267 }) do
+      if selected[excluded] then
+        return false, "RetreatUI - General Swing Timer includes non-melee spec " .. tostring(excluded)
+      end
+    end
+  end
+
   for _, data in ipairs(packageData.displays or {}) do
     local installed = WeakAuras.GetData(data.id)
     if not installed then return false, data.id .. " is missing" end
@@ -143,6 +175,7 @@ function WeakAurasModule:InstallGeneral()
     trinkets = true,
     buffsAndProcs = true,
     weaponProcs = true,
+    swingTimer = true,
   }
 
   return true, "RetreatUI - General installed and verified"
