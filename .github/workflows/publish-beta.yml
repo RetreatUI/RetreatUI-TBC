@@ -68,11 +68,11 @@ jobs:
           grep -q "^## Author: Retreat$" RetreatUI/RetreatUI.toc
           grep -q "^## Version: $VERSION$" RetreatUI/RetreatUI.toc
 
-          for file in Core.lua CoAElvUIProfile.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Macros.lua Installer.lua ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua; do
+          for file in Core.lua CoAElvUIProfile.lua Profiles.lua DetailsPersistenceFix.lua WeakAuraData.lua GeneralWeakAuraData.lua WeakAuras.lua GeneralWeakAuras.lua Macros.lua Installer.lua ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua; do
             test -s "RetreatUI/$file"
           done
 
-          for file in ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Macros.lua Installer.lua; do
+          for file in ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua Profiles.lua DetailsPersistenceFix.lua WeakAuraData.lua GeneralWeakAuraData.lua WeakAuras.lua GeneralWeakAuras.lua Macros.lua Installer.lua; do
             grep -q "^$file$" RetreatUI/RetreatUI.toc
           done
 
@@ -102,13 +102,29 @@ jobs:
           assert sha256(details.encode()).hexdigest() == "a15cfe79ff72272f0f03a0f2118c17fc914a29625d825d1f16f960163fce250b"
           PY
 
-          # WeakAuras must resolve only the current class package.
+          # Class HUD geometry stays identical to CoA.
           grep -q 'local function CurrentPackage' RetreatUI/WeakAuras.lua
           grep -q 'function WeakAurasModule:InstallClassHUD' RetreatUI/WeakAuras.lua
-          grep -q 'function WeakAurasModule:IsClassSupported' RetreatUI/WeakAuras.lua
           grep -q 'COA_RESOURCE_X, COA_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
           grep -q 'COA_MAIN_X, COA_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
           grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
+
+          # Universal RetreatUI - General category: exact CoA General positions.
+          grep -q 'local ROOT = "RetreatUI - General"' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'ROOT_TRINKETS = "RetreatUI - General — Trinkets"' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'ROOT_PROCS = "RetreatUI - General — Buffs & Procs"' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'GENERAL_PROC_X, GENERAL_PROC_Y = 0, -83' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'GENERAL_ICON_SIZE = 30' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'GENERAL_ICON_SPACING = 3' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'trinkets.anchorFrameType = "SELECTFRAME"' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'trinkets.anchorFrameFrame = "ElvUF_Player"' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'trinkets.anchorPoint = "TOPRIGHT"' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'trinkets.selfPoint = "BOTTOMRIGHT"' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'trinkets.yOffset = 2' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'GENERAL_MAX_PROC_DURATION = 60' RetreatUI/GeneralWeakAuraData.lua
+          grep -q 'weaponProcs = true' RetreatUI/GeneralWeakAuras.lua
+          grep -q 'function WeakAurasModule:InstallGeneral' RetreatUI/GeneralWeakAuras.lua
+          grep -q 'local OriginalInstallClassHUD' RetreatUI/GeneralWeakAuras.lua
 
           # Class macros must be Character Specific only and never reuse General Macro slots.
           grep -q 'characterSpecific = true' RetreatUI/Macros.lua
@@ -134,7 +150,7 @@ jobs:
           grep -q 'profile.general.valuecolor' RetreatUI/Profiles.lua
           grep -q 'classColor = true' RetreatUI/Profiles.lua
 
-          # Plater Classic does not expose Plater.ImportProfile. Mirror its own import path instead.
+          # Plater Classic import flow.
           grep -q 'local function ImportPlaterClassic' RetreatUI/Profiles.lua
           grep -q 'Plater.DecompressData' RetreatUI/Profiles.lua
           grep -q 'Plater.db.SetProfile' RetreatUI/Profiles.lua
@@ -143,19 +159,20 @@ jobs:
           ! grep -q 'Plater.ImportProfile' RetreatUI/Profiles.lua
           grep -q 'function Profiles:ApplyPlaterTheme()' RetreatUI/Profiles.lua
 
-          # Details must persist the imported profile, active selector and window state before ReloadUI.
-          grep -q 'local function PersistDetailsProfile' RetreatUI/Profiles.lua
-          grep -q '_detalhes_database.active_profile = PROFILE_NAME' RetreatUI/Profiles.lua
-          grep -q '__char_profiles\[characterKey\] = PROFILE_NAME' RetreatUI/Profiles.lua
-          grep -q 'details.SaveProfile' RetreatUI/Profiles.lua
-          grep -q 'pcall(details.ApplyProfile, details, PROFILE_NAME, true)' RetreatUI/Profiles.lua
-          grep -q 'persisted = true' RetreatUI/Profiles.lua
+          # Details: persist both profile state and the character-local is_open table.
+          grep -q 'local function ForceDetailsWindowsOpen' RetreatUI/DetailsPersistenceFix.lua
+          grep -q 'skin.__was_opened = true' RetreatUI/DetailsPersistenceFix.lua
+          grep -q 'config.is_open = true' RetreatUI/DetailsPersistenceFix.lua
+          grep -q '_detalhes_database.local_instances_config' RetreatUI/DetailsPersistenceFix.lua
+          grep -q 'forceOpenOnNextLogin = true' RetreatUI/DetailsPersistenceFix.lua
+          grep -q 'function Profiles:OnLogin' RetreatUI/DetailsPersistenceFix.lua
+          grep -q 'pcall(details.ApplyProfile, details, PROFILE_NAME, true)' RetreatUI/DetailsPersistenceFix.lua
           grep -q 'details.ImportProfile' RetreatUI/Profiles.lua
           grep -q 'function Profiles:ApplyDetailsTheme()' RetreatUI/Profiles.lua
           grep -q 'RETREAT_FONT = "Fira Sans Heavy"' RetreatUI/Profiles.lua
           grep -q 'RETREAT_TEXTURE = "ElvUI Norm"' RetreatUI/Profiles.lua
 
-          # Eight-step installer includes the shared Plater page.
+          # Eight-step installer remains unchanged.
           grep -q 'local TOTAL_PAGES = 8' RetreatUI/Installer.lua
           grep -q 'id = "welcome"' RetreatUI/Installer.lua
           grep -q 'id = "macros"' RetreatUI/Installer.lua
@@ -182,6 +199,9 @@ jobs:
           test -s "dist/$ASSET"
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/RetreatUI\.toc$'
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/WeakAuraData\.lua$'
+          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/GeneralWeakAuraData\.lua$'
+          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/GeneralWeakAuras\.lua$'
+          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DetailsPersistenceFix\.lua$'
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/Macros\.lua$'
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/ProfilePayloadDetails\.lua$'
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/ProfilePayloadPlater4\.lua$'
@@ -205,13 +225,15 @@ jobs:
         run: |
           set -euo pipefail
           NOTES=$(cat <<'EOF'
-          RetreatUI TBC beta 8.
+          RetreatUI TBC beta 9.
 
-          Hotfixes:
-          - Fixes Plater import on TBC Classic builds which do not expose Plater.ImportProfile. RetreatUI now follows Plater Classic's own profile flow: DecompressData → SetProfile → ResetProfile → copy imported settings.
-          - Fixes Details windows/profile disappearing after the installer's Reload UI. RetreatUI now explicitly persists the RetreatUI profile, active profile selector, per-character profile mapping and live window state before reload.
-          - Keeps the supplied Plater and Details payloads byte-for-byte unchanged before RetreatUI typography/texture normalization.
-          - Keeps the beta 7 ElvUI class colors, stance/form-bar alignment, character-specific class macros and eight-step installer unchanged.
+          Includes:
+          - Adds the universal WeakAuras category `RetreatUI - General` for every class.
+          - General includes two trinket trackers in the exact CoA position: 30px icons with 3px spacing, anchored BOTTOMRIGHT to the ElvUI player frame TOPRIGHT at 0,+2.
+          - General includes a Buffs & Procs row in the exact CoA aura-tracker position at screen X 0 / Y -83. It automatically tracks short player buffs/procs, including trinket and weapon proc auras.
+          - Keeps class WeakAuras class-specific. General installs first, then only the current class package when one exists.
+          - Fixes Details reload persistence at the character-local layer by synchronizing both profile `__was_opened` state and `local_instances_config[].is_open`, then restoring the RetreatUI profile once after the installer reload.
+          - Keeps beta 8 Plater compatibility, ElvUI class colors, stance/form-bar alignment and Character Specific class macros unchanged.
 
           This remains a testing prerelease.
           EOF
