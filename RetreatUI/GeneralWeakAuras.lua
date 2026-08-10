@@ -25,6 +25,27 @@ local function AddDisplay(data)
   return true
 end
 
+local function VerifySpecLoad(id, expectedSpecs)
+  local data = WeakAuras.GetData(id)
+  if not data then return false, id .. " is missing" end
+  local load = data.load or {}
+  local selected = load.class_and_spec and load.class_and_spec.multi or {}
+  if load.use_class_and_spec ~= false then
+    return false, id .. " is not using multi-spec Load checks"
+  end
+  for specID, enabled in pairs(expectedSpecs or {}) do
+    if enabled and selected[specID] ~= true then
+      return false, id .. " is missing spec " .. tostring(specID)
+    end
+  end
+  for specID, enabled in pairs(selected) do
+    if enabled and not (expectedSpecs and expectedSpecs[specID]) then
+      return false, id .. " has unexpected spec " .. tostring(specID)
+    end
+  end
+  return true
+end
+
 function WeakAurasModule:HasClassPackage()
   local class = RUI:GetPlayerClass()
   local key = class and class:lower()
@@ -93,21 +114,14 @@ function WeakAurasModule:VerifyGeneral(packageData)
       return false, "RetreatUI - General Swing Timer is not in the resource-adjacent lane"
     end
 
-    local load = swing.load or {}
-    local selected = load.class_and_spec and load.class_and_spec.multi or {}
-    if load.use_class_and_spec ~= false then
-      return false, "RetreatUI - General Swing Timer is not using multi-spec Load checks"
-    end
-    for specID, enabled in pairs(expected.swingSpecs or {}) do
-      if enabled and selected[specID] ~= true then
-        return false, "RetreatUI - General Swing Timer is missing spec " .. tostring(specID)
-      end
-    end
-    for _, excluded in ipairs({ 65, 102, 105, 262, 264, 256, 257, 258, 62, 63, 64, 265, 266, 267 }) do
-      if selected[excluded] then
-        return false, "RetreatUI - General Swing Timer includes non-melee spec " .. tostring(excluded)
-      end
-    end
+    local ok, message = VerifySpecLoad(expected.swing, expected.swingSpecs)
+    if not ok then return false, message end
+    ok, message = VerifySpecLoad(expected.swingMain, expected.meleeSwingSpecs)
+    if not ok then return false, message end
+    ok, message = VerifySpecLoad(expected.swingOff, expected.offhandSwingSpecs)
+    if not ok then return false, message end
+    ok, message = VerifySpecLoad(expected.swingRanged, expected.hunterSwingSpecs)
+    if not ok then return false, message end
   end
 
   for _, data in ipairs(packageData.displays or {}) do
@@ -132,8 +146,6 @@ function WeakAurasModule:InstallGeneral()
     return false, "RetreatUI - General returned invalid data"
   end
 
-  -- Seed the static category first, then nested dynamic groups, then their
-  -- displays. Finally restore controlledChildren on each group.
   local rootSeed = {}
   for key, value in pairs(packageData.root) do rootSeed[key] = value end
   rootSeed.controlledChildren = {}
@@ -184,17 +196,11 @@ end
 local OriginalIsClassSupported = WeakAurasModule.IsClassSupported
 local OriginalInstallClassHUD = WeakAurasModule.InstallClassHUD
 
--- The installer has historically treated IsClassSupported as its WeakAuras
--- readiness check. General is universal, so every class now has a valid WA
--- package even before its class-specific HUD has been authored.
 function WeakAurasModule:IsClassSupported()
   if self:IsGeneralSupported() then return true end
   return OriginalIsClassSupported and OriginalIsClassSupported(self) or false
 end
 
--- Keep the existing installer/API entry point. It now installs General first,
--- then only the current class HUD when one exists. No other class package is
--- ever imported.
 function WeakAurasModule:InstallClassHUD()
   local generalOK, generalMessage = self:InstallGeneral()
   if not generalOK then return false, generalMessage end
