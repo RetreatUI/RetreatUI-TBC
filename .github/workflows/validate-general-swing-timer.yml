@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "RetreatUI/GeneralSwingTimer.lua"
+      - "RetreatUI/GeneralSwingPlacement.lua"
       - "RetreatUI/GeneralWeakAuras.lua"
       - "RetreatUI/RetreatUI.toc"
       - ".github/workflows/validate-general-swing-timer.yml"
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - "RetreatUI/GeneralSwingTimer.lua"
+      - "RetreatUI/GeneralSwingPlacement.lua"
       - "RetreatUI/GeneralWeakAuras.lua"
       - "RetreatUI/RetreatUI.toc"
       - ".github/workflows/validate-general-swing-timer.yml"
@@ -32,14 +34,42 @@ jobs:
         run: |
           set -euo pipefail
           luac5.1 -p RetreatUI/GeneralSwingTimer.lua
+          luac5.1 -p RetreatUI/GeneralSwingPlacement.lua
           luac5.1 -p RetreatUI/GeneralWeakAuras.lua
 
           grep -q '^GeneralSwingTimer.lua$' RetreatUI/RetreatUI.toc
+          grep -q '^GeneralSwingPlacement.lua$' RetreatUI/RetreatUI.toc
           grep -q 'ROOT = "RetreatUI - General — Swing Timer"' RetreatUI/GeneralSwingTimer.lua
-          grep -q 'SWING_X, SWING_Y = 0, -142' RetreatUI/GeneralSwingTimer.lua
           grep -q 'SWING_WIDTH, SWING_HEIGHT = 360, 5' RetreatUI/GeneralSwingTimer.lua
           grep -q 'SWING_SPACING = 1' RetreatUI/GeneralSwingTimer.lua
           grep -q 'use_class_and_spec = false' RetreatUI/GeneralSwingTimer.lua
+
+          # Final placement is resource-adjacent and guaranteed not to overlap
+          # either the 16px resource bar at Y -152 or the 8px combo lane at Y -118.
+          grep -q 'local SWING_Y = -141' RetreatUI/GeneralSwingPlacement.lua
+          grep -q 'RESOURCE_CENTER_Y, RESOURCE_HEIGHT = -152, 16' RetreatUI/GeneralSwingPlacement.lua
+          grep -q 'COMBO_CENTER_Y, COMBO_HEIGHT = -118, 8' RetreatUI/GeneralSwingPlacement.lua
+          grep -q 'BAR_HEIGHT, BAR_SPACING, MAX_BARS = 5, 1, 3' RetreatUI/GeneralSwingPlacement.lua
+          python3 - <<'PY'
+          resource_center, resource_height = -152, 16
+          combo_center, combo_height = -118, 8
+          swing_bottom = -141
+          bar_height, spacing, max_bars = 5, 1, 3
+
+          resource_top = resource_center + resource_height / 2
+          combo_bottom = combo_center - combo_height / 2
+          stack_height = bar_height * max_bars + spacing * (max_bars - 1)
+          swing_top = swing_bottom + stack_height
+
+          resource_gap = swing_bottom - resource_top
+          combo_gap = combo_bottom - swing_top
+
+          assert resource_gap >= 3, resource_gap
+          assert combo_gap >= 2, combo_gap
+          assert swing_bottom > resource_top
+          assert swing_top < combo_bottom
+          print(f"Swing stack: {swing_bottom}..{swing_top}; resource gap={resource_gap}px; combo gap={combo_gap}px")
+          PY
 
           # Melee specs: all Warrior, Prot/Ret Paladin, Feral, all Rogue, Enhancement.
           for spec in 71 72 73 66 70 103 259 260 261 263; do
