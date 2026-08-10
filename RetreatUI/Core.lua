@@ -4,7 +4,7 @@ RetreatUITBC = RetreatUITBC or {}
 local RUI = RetreatUITBC
 
 RUI.name = addonName
-RUI.version = "0.1.0-beta.8"
+RUI.version = "0.1.0-beta.9"
 RUI.modules = RUI.modules or {}
 RUI.profilePayloads = RUI.profilePayloads or {}
 RUI.weakAuraPackages = RUI.weakAuraPackages or {}
