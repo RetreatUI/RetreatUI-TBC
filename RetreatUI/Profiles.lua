@@ -36,6 +36,13 @@ local function CharacterKey()
   return name
 end
 
+local function DetailsCharacterKey()
+  local name = UnitName and UnitName("player")
+  local realm = GetRealmName and GetRealmName()
+  if name and realm and realm ~= "" then return name .. "-" .. realm end
+  return name
+end
+
 local function PlayerClassColor()
   local _, class = UnitClass("player")
   local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
@@ -187,6 +194,47 @@ local function ThemeDetailsProfile(profile)
   return changed
 end
 
+local function PersistDetailsProfile(details)
+  if type(details) ~= "table" then return false, "Details is not loaded" end
+
+  details.active_profile = PROFILE_NAME
+  if type(_G._detalhes_database) == "table" then
+    _G._detalhes_database.active_profile = PROFILE_NAME
+  end
+
+  if type(_G._detalhes_global) == "table" then
+    _G._detalhes_global.__profiles = type(_G._detalhes_global.__profiles) == "table" and _G._detalhes_global.__profiles or {}
+    _G._detalhes_global.__char_profiles = type(_G._detalhes_global.__char_profiles) == "table" and _G._detalhes_global.__char_profiles or {}
+    local characterKey = DetailsCharacterKey()
+    if characterKey then _G._detalhes_global.__char_profiles[characterKey] = PROFILE_NAME end
+  end
+
+  -- Details keeps the visible instance/window state in the active profile.
+  -- Explicitly save it here because the installer reload follows immediately
+  -- after import and older Classic builds do not always persist that live state
+  -- before ReloadUI switches sessions.
+  if type(details.SaveProfile) == "function" then
+    local ok, saved = pcall(details.SaveProfile, details, PROFILE_NAME)
+    if not ok or saved == false then
+      return false, "Details profile is active, but its window state could not be persisted: " .. tostring(saved)
+    end
+  end
+
+  -- SaveProfile uses the current profile name. Reassert both selectors after it
+  -- so Details startup resolves RetreatUI on the next login/reload.
+  details.active_profile = PROFILE_NAME
+  if type(_G._detalhes_database) == "table" then
+    _G._detalhes_database.active_profile = PROFILE_NAME
+  end
+  if type(_G._detalhes_global) == "table" then
+    _G._detalhes_global.__char_profiles = type(_G._detalhes_global.__char_profiles) == "table" and _G._detalhes_global.__char_profiles or {}
+    local characterKey = DetailsCharacterKey()
+    if characterKey then _G._detalhes_global.__char_profiles[characterKey] = PROFILE_NAME end
+  end
+
+  return true
+end
+
 function Profiles:ApplyDetailsTheme()
   local details = GetDetails()
   if type(details) ~= "table" then return false, "Details is not loaded" end
@@ -243,12 +291,17 @@ function Profiles:ApplyDetails()
     return false, "This Details build does not expose ImportProfile"
   end
 
+  -- Signature in Details Classic: profileString, newProfileName,
+  -- bImportAutoRunCode, bIsFromImportPrompt, overwriteExisting.
   local ok, imported, importError = pcall(details.ImportProfile, details, payload, PROFILE_NAME, false, false, true)
   if not ok then return false, "Details import error: " .. tostring(imported) end
   if imported == false then return false, tostring(importError or "Details rejected the RetreatUI profile") end
 
+  -- ImportProfile normally activates the profile itself. Reapply with no-save to
+  -- make the activation deterministic without first overwriting the import with
+  -- stale live settings on older Classic builds.
   if type(details.ApplyProfile) == "function" then
-    local applyOK, applyResult = pcall(details.ApplyProfile, details, PROFILE_NAME)
+    local applyOK, applyResult = pcall(details.ApplyProfile, details, PROFILE_NAME, true)
     if not applyOK or applyResult == false then
       return false, "Details profile imported, but activation failed: " .. tostring(applyResult)
     end
@@ -256,6 +309,9 @@ function Profiles:ApplyDetails()
 
   local themed, themeMessage = self:ApplyDetailsTheme()
   if not themed then return false, themeMessage end
+
+  local persisted, persistMessage = PersistDetailsProfile(details)
+  if not persisted then return false, persistMessage end
 
   local db = RUI:EnsureDB()
   db.integrations = db.integrations or {}
@@ -265,9 +321,10 @@ function Profiles:ApplyDetails()
     imported = true,
     universal = true,
     themed = true,
+    persisted = true,
     version = RUI.version,
   }
-  return true, "RetreatUI Details profile imported and themed"
+  return true, "RetreatUI Details profile imported, themed and persisted for reload"
 end
 
 function Profiles:ApplyPlaterTheme()
@@ -288,8 +345,45 @@ function Profiles:ApplyPlaterTheme()
   if type(Plater.RefreshDBUpvalues) == "function" then pcall(Plater.RefreshDBUpvalues) end
   if type(Plater.RefreshDBLists) == "function" then pcall(Plater.RefreshDBLists) end
   if type(Plater.UpdateAllPlates) == "function" then pcall(Plater.UpdateAllPlates) end
+  if type(Plater.UpdateAllNames) == "function" then pcall(Plater.UpdateAllNames) end
 
   return true, string.format("RetreatUI font and textures applied to Plater (%d font fields)", changed)
+end
+
+local function ImportPlaterClassic(payload)
+  if not Plater or type(Plater.DecompressData) ~= "function" then
+    return false, "This Plater build does not expose DecompressData"
+  end
+  if type(Plater.db) ~= "table" or type(Plater.db.SetProfile) ~= "function" or type(Plater.db.ResetProfile) ~= "function" then
+    return false, "This Plater build does not expose the Classic profile database API"
+  end
+
+  local ok, profile = pcall(Plater.DecompressData, payload, "print")
+  if not ok then return false, "Plater profile decompression error: " .. tostring(profile) end
+  if type(profile) ~= "table" or type(profile.plate_config) ~= "table" then
+    return false, "Plater rejected the RetreatUI profile payload"
+  end
+
+  local setOK, setResult = pcall(Plater.db.SetProfile, Plater.db, PROFILE_NAME)
+  if not setOK then return false, "Plater could not select RetreatUI profile: " .. tostring(setResult) end
+
+  local resetOK, resetResult = pcall(Plater.db.ResetProfile, Plater.db, false, true)
+  if not resetOK then return false, "Plater could not reset the target profile: " .. tostring(resetResult) end
+  if type(Plater.db.profile) ~= "table" then return false, "Plater target profile is unavailable" end
+
+  -- This mirrors Plater Classic's own Profiles -> Import flow:
+  -- DecompressData -> SetProfile -> ResetProfile -> copy imported table.
+  if DetailsFramework and DetailsFramework.table and type(DetailsFramework.table.copy) == "function" then
+    local copyOK, copyResult = pcall(DetailsFramework.table.copy, Plater.db.profile, profile)
+    if not copyOK then return false, "Plater profile copy failed: " .. tostring(copyResult) end
+  else
+    Merge(Plater.db.profile, profile)
+  end
+
+  -- The built-in importer sets this only to reopen Plater's own options after
+  -- its reload. RetreatUI owns the installer flow, so do not reopen that panel.
+  Plater.db.profile.reopoen_options_panel_on_tab = nil
+  return true
 end
 
 function Profiles:ApplyPlater()
@@ -298,13 +392,9 @@ function Profiles:ApplyPlater()
   if type(payload) ~= "string" or payload == "" then
     return false, "RetreatUI Plater profile payload is missing"
   end
-  if type(Plater.ImportProfile) ~= "function" then
-    return false, "This Plater build does not expose ImportProfile"
-  end
 
-  local ok, result = pcall(Plater.ImportProfile, payload, true, true)
-  if not ok then return false, "Plater import error: " .. tostring(result) end
-  if result == false then return false, "Plater rejected the RetreatUI profile" end
+  local imported, importMessage = ImportPlaterClassic(payload)
+  if not imported then return false, importMessage end
 
   local themed, themeMessage = self:ApplyPlaterTheme()
   if not themed then return false, themeMessage end
@@ -312,13 +402,15 @@ function Profiles:ApplyPlater()
   local db = RUI:EnsureDB()
   db.integrations = db.integrations or {}
   db.integrations.plater = {
+    profile = PROFILE_NAME,
     installed = true,
     imported = true,
     universal = true,
     themed = true,
+    classicProfileAPI = true,
     version = RUI.version,
   }
-  return true, "RetreatUI Plater profile imported and themed"
+  return true, "RetreatUI Plater profile imported with the Classic profile API and themed"
 end
 
 function Profiles:InstallSelected()

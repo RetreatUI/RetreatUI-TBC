@@ -81,7 +81,7 @@ jobs:
           ! grep -R 'weakAuraPayloads\|WeakAuras.Import' RetreatUI
           ! grep -R "OpenAI\|ChatGPT" RetreatUI
 
-          # Supplied profile exports must be embedded byte-for-byte before RetreatUI styling is applied.
+          # Supplied profile exports must stay embedded byte-for-byte.
           python3 - <<'PY'
           from pathlib import Path
           from hashlib import sha256
@@ -127,22 +127,33 @@ jobs:
           grep -q 'MouseoverSpell("Healing Touch")' RetreatUI/Macros.lua
           grep -q 'MouseoverSpell("Abolish Poison")' RetreatUI/Macros.lua
 
-          # ElvUI: stance/form bar stays at bottom centered with the player frame and class colors are applied on import.
+          # ElvUI layout/class-color invariants.
           grep -q 'ShiftAB = "BOTTOM,ElvUIParent,BOTTOM,-310,32"' RetreatUI/CoAElvUIProfile.lua
           grep -q 'healthclass = true' RetreatUI/CoAElvUIProfile.lua
           grep -q 'local function ApplyPlayerClassColor' RetreatUI/Profiles.lua
           grep -q 'profile.general.valuecolor' RetreatUI/Profiles.lua
           grep -q 'classColor = true' RetreatUI/Profiles.lua
 
-          # Universal Plater and Details imports keep supplied profile logic, then normalize RetreatUI visuals.
-          grep -q 'function Profiles:ApplyPlater()' RetreatUI/Profiles.lua
+          # Plater Classic does not expose Plater.ImportProfile. Mirror its own import path instead.
+          grep -q 'local function ImportPlaterClassic' RetreatUI/Profiles.lua
+          grep -q 'Plater.DecompressData' RetreatUI/Profiles.lua
+          grep -q 'Plater.db.SetProfile' RetreatUI/Profiles.lua
+          grep -q 'Plater.db.ResetProfile' RetreatUI/Profiles.lua
+          grep -q 'DetailsFramework.table.copy' RetreatUI/Profiles.lua
+          ! grep -q 'Plater.ImportProfile' RetreatUI/Profiles.lua
           grep -q 'function Profiles:ApplyPlaterTheme()' RetreatUI/Profiles.lua
-          grep -q 'function Profiles:ApplyDetails()' RetreatUI/Profiles.lua
+
+          # Details must persist the imported profile, active selector and window state before ReloadUI.
+          grep -q 'local function PersistDetailsProfile' RetreatUI/Profiles.lua
+          grep -q '_detalhes_database.active_profile = PROFILE_NAME' RetreatUI/Profiles.lua
+          grep -q '__char_profiles\[characterKey\] = PROFILE_NAME' RetreatUI/Profiles.lua
+          grep -q 'details.SaveProfile' RetreatUI/Profiles.lua
+          grep -q 'pcall(details.ApplyProfile, details, PROFILE_NAME, true)' RetreatUI/Profiles.lua
+          grep -q 'persisted = true' RetreatUI/Profiles.lua
+          grep -q 'details.ImportProfile' RetreatUI/Profiles.lua
           grep -q 'function Profiles:ApplyDetailsTheme()' RetreatUI/Profiles.lua
           grep -q 'RETREAT_FONT = "Fira Sans Heavy"' RetreatUI/Profiles.lua
           grep -q 'RETREAT_TEXTURE = "ElvUI Norm"' RetreatUI/Profiles.lua
-          grep -q 'Plater.ImportProfile' RetreatUI/Profiles.lua
-          grep -q 'details.ImportProfile' RetreatUI/Profiles.lua
 
           # Eight-step installer includes the shared Plater page.
           grep -q 'local TOTAL_PAGES = 8' RetreatUI/Installer.lua
@@ -194,17 +205,13 @@ jobs:
         run: |
           set -euo pipefail
           NOTES=$(cat <<'EOF'
-          RetreatUI TBC beta 7.
+          RetreatUI TBC beta 8.
 
-          Includes:
-          - Embeds the supplied Plater and Details exports as the universal profiles used by every class.
-          - Plater keeps the supplied profile's tracking, scripts, sizing and gameplay behavior, then RetreatUI normalizes typography to Fira Sans Heavy and health/cast textures to ElvUI Norm.
-          - Details keeps the supplied profile/window setup, then RetreatUI applies Fira Sans Heavy, ElvUI Norm bars, compact spacing and the dark RetreatUI meter styling.
-          - ElvUI now follows the current character's class color for profile accents and unitframes.
-          - The stance/form bar remains at the bottom and is centered on the player frame at X -310.
-          - Class macro imports are strictly Character Specific Macros and never create, replace or reuse General Macro slots.
-          - The guided installer is now eight steps: Welcome → Macros → ElvUI → Plater → WeakAuras → Details → DBM → Reload.
-          - WeakAuras and Macros remain class-specific; ElvUI, Plater, Details and DBM are shared.
+          Hotfixes:
+          - Fixes Plater import on TBC Classic builds which do not expose Plater.ImportProfile. RetreatUI now follows Plater Classic's own profile flow: DecompressData → SetProfile → ResetProfile → copy imported settings.
+          - Fixes Details windows/profile disappearing after the installer's Reload UI. RetreatUI now explicitly persists the RetreatUI profile, active profile selector, per-character profile mapping and live window state before reload.
+          - Keeps the supplied Plater and Details payloads byte-for-byte unchanged before RetreatUI typography/texture normalization.
+          - Keeps the beta 7 ElvUI class colors, stance/form-bar alignment, character-specific class macros and eight-step installer unchanged.
 
           This remains a testing prerelease.
           EOF
