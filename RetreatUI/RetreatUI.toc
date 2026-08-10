@@ -2,9 +2,9 @@
 ## Title: RetreatUI
 ## Notes: RetreatUI installer, profiles and WeakAuras HUD for The Burning Crusade Classic Anniversary.
 ## Author: Retreat
-## Version: 0.1.0-beta.4
+## Version: 0.1.0-beta.5
 ## SavedVariables: RetreatUITBCDB
-## OptionalDeps: ElvUI, Plater, Details, WeakAuras
+## OptionalDeps: ElvUI, Plater, Details, WeakAuras, DBM-Core
 ## DefaultState: Enabled
 
 Core.lua
