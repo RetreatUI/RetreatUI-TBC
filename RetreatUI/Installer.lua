@@ -218,8 +218,8 @@ local function RefreshPage()
   frame.pageSubtitle:SetText(page.subtitle)
   frame.description:SetText(page.description)
 
-  frame.back:SetShown(index > 1)
-  frame.next:SetShown(index < TOTAL_PAGES)
+  if index > 1 then frame.back:Show() else frame.back:Hide() end
+  if index < TOTAL_PAGES then frame.next:Show() else frame.next:Hide() end
   frame.next.label:SetText(index == 1 and "GET STARTED" or "NEXT")
 
   if page.button then
@@ -242,7 +242,7 @@ local function RefreshPage()
     SetButtonEnabled(frame.action, true)
   elseif page.ready then
     local ready, message = page.ready()
-    SetStatus(message or (ready and "READY" or "NOT AVAILABLE"), ready and nil or false)
+    SetStatus(message or (ready and "READY" or "NOT AVAILABLE"), ready == true and true or false)
     SetButtonEnabled(frame.action, ready == true)
   else
     SetStatus("Follow the steps to build your RetreatUI setup.", nil)
