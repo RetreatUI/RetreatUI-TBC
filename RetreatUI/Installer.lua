@@ -2,7 +2,7 @@ local RUI = RetreatUITBC
 if not RUI then return end
 
 local frame
-local TOTAL_PAGES = 7
+local TOTAL_PAGES = 8
 
 local function SetBackdrop(widget, color, border)
   widget:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
@@ -84,13 +84,29 @@ local function ElvUIReady()
   local profiles = RUI.modules.profiles
   if not profiles or type(profiles.ApplyElvUI) ~= "function" then return false, "ELVUI PROFILE MODULE MISSING" end
   if type(RUI.ElvUIProfile) ~= "table" then return false, "ELVUI PROFILE NOT EMBEDDED" end
-  return true, "READY"
+  return true, "READY — CLASS COLOR: " .. string.upper(CurrentClassName())
 end
 
 local function ImportElvUI()
   local profiles = RUI.modules.profiles
   if not profiles or type(profiles.ApplyElvUI) ~= "function" then return false, "ElvUI profile module is missing." end
   return profiles:ApplyElvUI()
+end
+
+local function PlaterReady()
+  if not RUI:IsAddonLoaded("Plater") and not _G.Plater then return false, "PLATER NOT LOADED" end
+  local profiles = RUI.modules.profiles
+  if not profiles or type(profiles.ApplyPlater) ~= "function" then return false, "PLATER PROFILE MODULE MISSING" end
+  if type(RUI.profilePayloads) ~= "table" or type(RUI.profilePayloads.plater) ~= "string" or RUI.profilePayloads.plater == "" then
+    return false, "PLATER PROFILE NOT EMBEDDED"
+  end
+  return true, "READY — UNIVERSAL RETREATUI PROFILE"
+end
+
+local function ImportPlater()
+  local profiles = RUI.modules.profiles
+  if not profiles or type(profiles.ApplyPlater) ~= "function" then return false, "Plater profile module is missing." end
+  return profiles:ApplyPlater()
 end
 
 local function WeakAurasReady()
@@ -113,7 +129,10 @@ local function DetailsReady()
   if not RUI:IsAddonLoaded("Details") and not _G.Details and not _G._detalhes then return false, "DETAILS NOT LOADED" end
   local profiles = RUI.modules.profiles
   if not profiles or type(profiles.ApplyDetails) ~= "function" then return false, "DETAILS PROFILE MODULE MISSING" end
-  return true, "READY"
+  if type(RUI.profilePayloads) ~= "table" or type(RUI.profilePayloads.details) ~= "string" or RUI.profilePayloads.details == "" then
+    return false, "DETAILS PROFILE NOT EMBEDDED"
+  end
+  return true, "READY — UNIVERSAL RETREATUI PROFILE"
 end
 
 local function ImportDetails()
@@ -145,13 +164,13 @@ local PAGES = {
     id = "welcome",
     title = "WELCOME",
     subtitle = "Welcome to RetreatUI for The Burning Crusade.",
-    description = "This installer will guide you through each part of the setup one page at a time. Class-specific components are automatically matched to the class you are currently playing.",
+    description = "This installer guides you through each part of the setup one page at a time. Macros and WeakAuras are matched to the class you are currently playing; the shared ElvUI, Plater, Details and DBM setup is used across all classes.",
   },
   {
     id = "macros",
     title = function() return "IMPORT " .. string.upper(CurrentClassName()) .. " MACROS" end,
     subtitle = function() return "Install only the RetreatUI macros for " .. CurrentClassName() .. "." end,
-    description = function() return "RetreatUI detects your current class and only imports that class package. For Druid this includes the RUI Powershift macro; no macros from other classes are created." end,
+    description = "Class packages are imported into Character Specific Macros only. RetreatUI never creates, replaces or reuses a General Macro slot for class macros.",
     button = "IMPORT MACROS",
     ready = MacroReady,
     action = ImportMacros,
@@ -159,11 +178,20 @@ local PAGES = {
   {
     id = "elvui",
     title = "IMPORT ELVUI",
-    subtitle = "Install the RetreatUI ElvUI layout.",
-    description = "Creates and activates the shared RetreatUI ElvUI profile, including the player and target frame layout used by the central WeakAuras HUD.",
+    subtitle = function() return "Install the RetreatUI layout with " .. CurrentClassName() .. " class colors." end,
+    description = "Creates and activates the RetreatUI ElvUI profile. UnitFrames and profile accents follow your current class color, while the stance/form bar stays at the bottom centered directly beneath the player frame.",
     button = "IMPORT ELVUI",
     ready = ElvUIReady,
     action = ImportElvUI,
+  },
+  {
+    id = "plater",
+    title = "IMPORT PLATER",
+    subtitle = "Install the shared RetreatUI Plater profile.",
+    description = "Uses the same supplied Plater profile for every class, then normalizes typography and statusbar textures to Fira Sans Heavy and ElvUI Norm without changing the profile's tracking logic, scripts, colors or sizing.",
+    button = "IMPORT PLATER",
+    ready = PlaterReady,
+    action = ImportPlater,
   },
   {
     id = "weakauras",
@@ -177,8 +205,8 @@ local PAGES = {
   {
     id = "details",
     title = "IMPORT DETAILS",
-    subtitle = "Install the RetreatUI Details profile.",
-    description = "Applies the shared RetreatUI Details appearance and typography so the meter matches the rest of the UI.",
+    subtitle = "Install the shared RetreatUI Details profile.",
+    description = "Uses the same supplied Details profile for every class and keeps its window/segment setup, then applies the RetreatUI Fira Sans Heavy typography, ElvUI Norm bars, compact spacing and dark meter styling.",
     button = "IMPORT DETAILS",
     ready = DetailsReady,
     action = ImportDetails,
@@ -309,7 +337,7 @@ local function BuildInstaller()
   frame.brand:SetPoint("TOPLEFT", 28, -26)
   frame.brand:SetTextColor(0.95, 0.58, 0.12)
 
-  frame.progress = Font(frame, "STEP 1 OF 7", 10)
+  frame.progress = Font(frame, "STEP 1 OF 8", 10)
   frame.progress:SetPoint("TOPRIGHT", -52, -30)
   frame.progress:SetTextColor(0.58, 0.62, 0.68)
 
