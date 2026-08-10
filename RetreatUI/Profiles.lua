@@ -34,6 +34,49 @@ local function CharacterKey()
   return name
 end
 
+local function PlayerClassColor()
+  local _, class = UnitClass("player")
+  local color = class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+  if color then
+    return class, tonumber(color.r) or 1, tonumber(color.g) or 1, tonumber(color.b) or 1
+  end
+  -- Druid orange is only a safe visual fallback if the client does not expose
+  -- RAID_CLASS_COLORS for some reason. Normal installs always use the real class.
+  return class or "UNKNOWN", 1, 0.49, 0.04
+end
+
+local function ApplyPlayerClassColor(profile)
+  local class, r, g, b = PlayerClassColor()
+
+  profile.general = type(profile.general) == "table" and profile.general or {}
+  profile.general.valuecolor = { r = r, g = g, b = b, a = 1 }
+
+  profile.unitframe = type(profile.unitframe) == "table" and profile.unitframe or {}
+  profile.unitframe.colors = type(profile.unitframe.colors) == "table" and profile.unitframe.colors or {}
+  profile.unitframe.colors.colorhealthbyvalue = false
+  profile.unitframe.colors.healthclass = true
+  profile.unitframe.colors.healthReaction = true
+  profile.unitframe.colors.health = { r = r, g = g, b = b }
+
+  -- Keep text tied to the unit color instead of the old fixed Druid-orange hex.
+  local units = profile.unitframe.units
+  if type(units) == "table" then
+    if type(units.player) == "table" then
+      if type(units.player.name) == "table" then units.player.name.text_format = "[namecolor][name:medium]" end
+      if type(units.player.health) == "table" then units.player.health.text_format = "[namecolor][health:current]" end
+    end
+    if type(units.target) == "table" then
+      if type(units.target.name) == "table" then units.target.name.text_format = "[namecolor][name:medium]" end
+      if type(units.target.health) == "table" then units.target.health.text_format = "[namecolor][health:current]" end
+    end
+    if type(units.targettarget) == "table" and type(units.targettarget.name) == "table" then
+      units.targettarget.name.text_format = "[namecolor][name:short]"
+    end
+  end
+
+  return class
+end
+
 local DETAILS_PROFILE = {
   skin = "ElvUI",
   row_height = 18,
@@ -67,10 +110,13 @@ function Profiles:ApplyElvUI()
   if not E then return false, "ElvUI is not loaded" end
   if type(RUI.ElvUIProfile) ~= "table" then return false, "RetreatUI ElvUI profile baseline is missing" end
 
+  local profile = DeepCopy(RUI.ElvUIProfile)
+  local class = ApplyPlayerClassColor(profile)
+
   ElvDB = type(ElvDB) == "table" and ElvDB or {}
   ElvDB.profiles = type(ElvDB.profiles) == "table" and ElvDB.profiles or {}
   ElvDB.profileKeys = type(ElvDB.profileKeys) == "table" and ElvDB.profileKeys or {}
-  ElvDB.profiles[PROFILE_NAME] = DeepCopy(RUI.ElvUIProfile)
+  ElvDB.profiles[PROFILE_NAME] = DeepCopy(profile)
 
   local characterKey = CharacterKey()
   if characterKey then ElvDB.profileKeys[characterKey] = PROFILE_NAME end
@@ -83,9 +129,9 @@ function Profiles:ApplyElvUI()
 
   -- Older TBC ElvUI builds can expose a live database without the newer
   -- SetProfile path. Keep the persisted named profile as the source of truth,
-  -- then mirror it into the live table so the installer works on those builds.
+  -- then mirror the class-colored profile into the live table.
   if type(E.db) == "table" then
-    Merge(E.db, RUI.ElvUIProfile)
+    Merge(E.db, profile)
     activated = true
   end
 
@@ -96,8 +142,14 @@ function Profiles:ApplyElvUI()
 
   local db = RUI:EnsureDB()
   db.integrations = db.integrations or {}
-  db.integrations.elvui = { profile = PROFILE_NAME, installed = true, version = RUI.version }
-  return true, "RetreatUI ElvUI profile installed"
+  db.integrations.elvui = {
+    profile = PROFILE_NAME,
+    installed = true,
+    version = RUI.version,
+    class = class,
+    classColor = true,
+  }
+  return true, "RetreatUI ElvUI profile installed with class colors"
 end
 
 local function GetDetails()
