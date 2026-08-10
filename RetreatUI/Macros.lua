@@ -11,75 +11,65 @@ end
 local PACKAGES = {
   DRUID = {
     displayName = "Druid",
+    characterSpecific = true,
     recommendedAddon = "DruidMacroHelper",
     recommendation = "Druid Macro Helper (DMH) is recommended for safe powershifting and is required by the Haste/Sapper macros.",
     macros = {
       {
         name = "RUI Powershift",
         iconSpellId = 768,
-        perCharacter = true,
         body = "#showtooltip Cat Form\n/cancelaura Cat Form\n/cast !Cat Form",
       },
       {
         name = "RUI HasteSapper",
         iconSpellId = 9634,
-        perCharacter = true,
         requiresAddon = "DruidMacroHelper",
         body = "#showtooltip\n/dmh cd pot supersapper\n/dmh start\n/use Haste Potion\n/use Super Sapper Charge\n/cast !Dire Bear Form\n/dmh end",
       },
       {
         name = "RUI SuperSapper",
         iconSpellId = 9634,
-        perCharacter = true,
         requiresAddon = "DruidMacroHelper",
         body = "#showtooltip\n/dmh cd supersapper\n/dmh start\n/use Super Sapper Charge\n/cast !Dire Bear Form\n/dmh end",
       },
       {
         name = "RUI HealingTouch",
         iconSpellId = 26979,
-        perCharacter = true,
         body = MouseoverSpell("Healing Touch"),
       },
       {
         name = "RUI Regrowth",
         iconSpellId = 26980,
-        perCharacter = true,
         body = MouseoverSpell("Regrowth"),
       },
       {
         name = "RUI Rejuvenate",
         iconSpellId = 26982,
-        perCharacter = true,
         body = MouseoverSpell("Rejuvenation"),
       },
       {
         name = "RUI Lifebloom",
         iconSpellId = 33763,
-        perCharacter = true,
         body = MouseoverSpell("Lifebloom"),
       },
       {
         name = "RUI Swiftmend",
         iconSpellId = 18562,
-        perCharacter = true,
         body = MouseoverSpell("Swiftmend"),
       },
       {
         name = "RUI RemoveCurse",
         iconSpellId = 2782,
-        perCharacter = true,
         body = MouseoverSpell("Remove Curse"),
       },
       {
         name = "RUI CurePoison",
         iconSpellId = 8946,
-        perCharacter = true,
         body = MouseoverSpell("Cure Poison"),
       },
       {
         name = "RUI AbolPoison",
         iconSpellId = 2893,
-        perCharacter = true,
         body = MouseoverSpell("Abolish Poison"),
       },
     },
@@ -111,17 +101,33 @@ function Macros:IsRecommendedAddonLoaded()
   return RUI:IsAddonLoaded(addon)
 end
 
+local function CharacterMacroBounds()
+  local accountSlots = tonumber(_G.MAX_ACCOUNT_MACROS) or 120
+  local characterSlots = tonumber(_G.MAX_CHARACTER_MACROS) or 18
+  return accountSlots + 1, accountSlots + characterSlots
+end
+
+local function FindCharacterMacroByName(name)
+  if type(GetMacroInfo) ~= "function" then return nil end
+  local first, last = CharacterMacroBounds()
+  for index = first, last do
+    local macroName = GetMacroInfo(index)
+    if macroName == name then return index end
+  end
+  return nil
+end
+
 function Macros:IsReady()
   local class, package = GetPackage()
   if not class then return false, "PLAYER CLASS NOT AVAILABLE" end
   if not package or type(package.macros) ~= "table" or #package.macros == 0 then
     return false, "NO " .. class .. " MACRO PACKAGE"
   end
-  if type(CreateMacro) ~= "function" or type(EditMacro) ~= "function" or type(GetMacroIndexByName) ~= "function" then
+  if type(CreateMacro) ~= "function" or type(EditMacro) ~= "function" or type(GetMacroInfo) ~= "function" then
     return false, "MACRO API NOT AVAILABLE"
   end
 
-  local message = string.format("READY — %s (%d MACROS)", package.displayName or class, #package.macros)
+  local message = string.format("READY — %s (%d CHARACTER-SPECIFIC MACROS)", package.displayName or class, #package.macros)
   if package.recommendedAddon and not RUI:IsAddonLoaded(package.recommendedAddon) then
     message = message .. " — DMH RECOMMENDED / NOT LOADED"
   elseif package.recommendedAddon then
@@ -138,22 +144,23 @@ local function MacroIcon(definition)
   return "INV_MISC_QUESTIONMARK"
 end
 
-local function InstallMacro(definition)
-  local index = GetMacroIndexByName(definition.name)
+local function InstallCharacterMacro(definition)
+  local index = FindCharacterMacroByName(definition.name)
   local icon = MacroIcon(definition)
-  local perCharacter = definition.perCharacter and 1 or nil
 
-  if index and index > 0 then
-    local ok, result = pcall(EditMacro, index, definition.name, icon, definition.body, perCharacter)
+  -- Class packages are always character-specific. Never search, edit or reuse
+  -- an account-wide General Macro slot with the same name.
+  if index then
+    local ok, result = pcall(EditMacro, index, definition.name, icon, definition.body, 1)
     if not ok or not result then
-      return false, "Could not update " .. definition.name .. ": " .. tostring(result)
+      return false, "Could not update character macro " .. definition.name .. ": " .. tostring(result)
     end
     return true, "updated"
   end
 
-  local ok, result = pcall(CreateMacro, definition.name, icon, definition.body, perCharacter)
+  local ok, result = pcall(CreateMacro, definition.name, icon, definition.body, 1)
   if not ok or not result then
-    return false, "Could not create " .. definition.name .. ": " .. tostring(result)
+    return false, "Could not create character macro " .. definition.name .. ": " .. tostring(result)
   end
   return true, "created"
 end
@@ -167,10 +174,13 @@ function Macros:Import()
   if not package then
     return false, "No RetreatUI macro package exists for " .. tostring(class or "this class") .. "."
   end
+  if package.characterSpecific ~= true then
+    return false, tostring(class or "Class") .. " macro package is not marked character-specific"
+  end
 
   local installed = 0
   for _, definition in ipairs(package.macros) do
-    local ok, message = InstallMacro(definition)
+    local ok, message = InstallCharacterMacro(definition)
     if not ok then return false, message end
     installed = installed + 1
   end
@@ -178,9 +188,14 @@ function Macros:Import()
   local db = RUI:EnsureDB()
   db.integrations = db.integrations or {}
   db.integrations.macros = db.integrations.macros or {}
-  db.integrations.macros[class] = { installed = true, version = RUI.version, count = installed }
+  db.integrations.macros[class] = {
+    installed = true,
+    version = RUI.version,
+    count = installed,
+    characterSpecific = true,
+  }
 
-  local message = string.format("%s macros installed (%d).", package.displayName or class, installed)
+  local message = string.format("%s character-specific macros installed (%d). General Macros were not modified.", package.displayName or class, installed)
   if package.recommendedAddon and not RUI:IsAddonLoaded(package.recommendedAddon) then
     message = message .. " Install/enable Druid Macro Helper before using the DMH Haste/Sapper macros."
   end

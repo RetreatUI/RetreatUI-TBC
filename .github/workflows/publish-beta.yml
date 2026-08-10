@@ -67,15 +67,40 @@ jobs:
           test -f RetreatUI/RetreatUI.toc
           grep -q "^## Author: Retreat$" RetreatUI/RetreatUI.toc
           grep -q "^## Version: $VERSION$" RetreatUI/RetreatUI.toc
-          for file in Core.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Macros.lua Installer.lua; do
+
+          for file in Core.lua CoAElvUIProfile.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Macros.lua Installer.lua ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua; do
             test -s "RetreatUI/$file"
           done
-          grep -q '^WeakAuraData.lua$' RetreatUI/RetreatUI.toc
-          grep -q '^WeakAuras.lua$' RetreatUI/RetreatUI.toc
-          grep -q '^Macros.lua$' RetreatUI/RetreatUI.toc
+
+          for file in ProfilePayloadPlater1.lua ProfilePayloadPlater2.lua ProfilePayloadPlater3.lua ProfilePayloadPlater4.lua ProfilePayloadDetails.lua Profiles.lua WeakAuraData.lua WeakAuras.lua Macros.lua Installer.lua; do
+            grep -q "^$file$" RetreatUI/RetreatUI.toc
+          done
+
           ! test -e RetreatUI/DruidRuntime.lua
           ! grep -q '^DruidRuntime.lua$' RetreatUI/RetreatUI.toc
           ! grep -R 'weakAuraPayloads\|WeakAuras.Import' RetreatUI
+          ! grep -R "OpenAI\|ChatGPT" RetreatUI
+
+          # Supplied profile exports must be embedded byte-for-byte before RetreatUI styling is applied.
+          python3 - <<'PY'
+          from pathlib import Path
+          from hashlib import sha256
+
+          def payload(path):
+              text = Path(path).read_text(encoding="utf-8")
+              return text.split("[=[", 1)[1].rsplit("]=]", 1)[0]
+
+          plater = "".join(payload(f"RetreatUI/ProfilePayloadPlater{i}.lua") for i in range(1, 5))
+          details = payload("RetreatUI/ProfilePayloadDetails.lua")
+
+          assert len(plater) == 63086, len(plater)
+          assert plater.startswith("!PLATER:2!")
+          assert sha256(plater.encode()).hexdigest() == "a89a4a2638d7a911e2579e23545f60d02894dd0ea66e70b6a710e2b9c3700ba8"
+
+          assert len(details) == 10736, len(details)
+          assert details.startswith("D!ProfileV2-")
+          assert sha256(details.encode()).hexdigest() == "a15cfe79ff72272f0f03a0f2118c17fc914a29625d825d1f16f960163fce250b"
+          PY
 
           # WeakAuras must resolve only the current class package.
           grep -q 'local function CurrentPackage' RetreatUI/WeakAuras.lua
@@ -85,34 +110,53 @@ jobs:
           grep -q 'COA_MAIN_X, COA_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
           grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
 
-          # Druid macro package and DMH recommendation.
+          # Class macros must be Character Specific only and never reuse General Macro slots.
+          grep -q 'characterSpecific = true' RetreatUI/Macros.lua
+          grep -q 'local function FindCharacterMacroByName' RetreatUI/Macros.lua
+          grep -q 'MAX_ACCOUNT_MACROS' RetreatUI/Macros.lua
+          grep -q 'MAX_CHARACTER_MACROS' RetreatUI/Macros.lua
+          grep -q 'pcall(CreateMacro, definition.name, icon, definition.body, 1)' RetreatUI/Macros.lua
+          grep -q 'pcall(EditMacro, index, definition.name, icon, definition.body, 1)' RetreatUI/Macros.lua
+          ! grep -q 'GetMacroIndexByName' RetreatUI/Macros.lua
+
+          # Druid package and DMH recommendation remain intact.
           grep -q 'recommendedAddon = "DruidMacroHelper"' RetreatUI/Macros.lua
           grep -q 'name = "RUI Powershift"' RetreatUI/Macros.lua
-          grep -q 'name = "RUI HasteSapper"' RetreatUI/Macros.lua
           grep -q '/dmh cd pot supersapper' RetreatUI/Macros.lua
-          grep -q 'name = "RUI SuperSapper"' RetreatUI/Macros.lua
           grep -q '/dmh cd supersapper' RetreatUI/Macros.lua
           grep -q 'MouseoverSpell("Healing Touch")' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Regrowth")' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Rejuvenation")' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Lifebloom")' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Swiftmend")' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Remove Curse")' RetreatUI/Macros.lua
-          grep -q 'MouseoverSpell("Cure Poison")' RetreatUI/Macros.lua
           grep -q 'MouseoverSpell("Abolish Poison")' RetreatUI/Macros.lua
 
-          # Seven-step installer with class-aware macro / WA pages.
-          grep -q 'local TOTAL_PAGES = 7' RetreatUI/Installer.lua
+          # ElvUI: stance/form bar stays at bottom centered with the player frame and class colors are applied on import.
+          grep -q 'ShiftAB = "BOTTOM,ElvUIParent,BOTTOM,-310,32"' RetreatUI/CoAElvUIProfile.lua
+          grep -q 'healthclass = true' RetreatUI/CoAElvUIProfile.lua
+          grep -q 'local function ApplyPlayerClassColor' RetreatUI/Profiles.lua
+          grep -q 'profile.general.valuecolor' RetreatUI/Profiles.lua
+          grep -q 'classColor = true' RetreatUI/Profiles.lua
+
+          # Universal Plater and Details imports keep supplied profile logic, then normalize RetreatUI visuals.
+          grep -q 'function Profiles:ApplyPlater()' RetreatUI/Profiles.lua
+          grep -q 'function Profiles:ApplyPlaterTheme()' RetreatUI/Profiles.lua
+          grep -q 'function Profiles:ApplyDetails()' RetreatUI/Profiles.lua
+          grep -q 'function Profiles:ApplyDetailsTheme()' RetreatUI/Profiles.lua
+          grep -q 'RETREAT_FONT = "Fira Sans Heavy"' RetreatUI/Profiles.lua
+          grep -q 'RETREAT_TEXTURE = "ElvUI Norm"' RetreatUI/Profiles.lua
+          grep -q 'Plater.ImportProfile' RetreatUI/Profiles.lua
+          grep -q 'details.ImportProfile' RetreatUI/Profiles.lua
+
+          # Eight-step installer includes the shared Plater page.
+          grep -q 'local TOTAL_PAGES = 8' RetreatUI/Installer.lua
           grep -q 'id = "welcome"' RetreatUI/Installer.lua
           grep -q 'id = "macros"' RetreatUI/Installer.lua
           grep -q 'id = "elvui"' RetreatUI/Installer.lua
+          grep -q 'id = "plater"' RetreatUI/Installer.lua
           grep -q 'id = "weakauras"' RetreatUI/Installer.lua
           grep -q 'id = "details"' RetreatUI/Installer.lua
           grep -q 'id = "dbm"' RetreatUI/Installer.lua
           grep -q 'id = "reload"' RetreatUI/Installer.lua
+          grep -q 'ImportPlater' RetreatUI/Installer.lua
           grep -q 'InstallClassHUD' RetreatUI/Installer.lua
           grep -q 'CurrentClassName' RetreatUI/Installer.lua
-          ! grep -R "OpenAI\|ChatGPT" RetreatUI
 
       - name: Package
         shell: bash
@@ -128,6 +172,8 @@ jobs:
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/RetreatUI\.toc$'
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/WeakAuraData\.lua$'
           zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/Macros\.lua$'
+          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/ProfilePayloadDetails\.lua$'
+          zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/ProfilePayloadPlater4\.lua$'
           ! zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DruidRuntime\.lua$'
 
       - name: Upload artifact
@@ -148,14 +194,17 @@ jobs:
         run: |
           set -euo pipefail
           NOTES=$(cat <<'EOF'
-          RetreatUI TBC beta 6.
+          RetreatUI TBC beta 7.
 
           Includes:
-          - Macro and WeakAuras imports are now class-specific and only use the package matching the character being played.
-          - Druid now ships with the existing powershift macro, two Druid Macro Helper Haste/Sapper macros, and mouseover macros for Healing Touch, Regrowth, Rejuvenation, Lifebloom, Swiftmend, Remove Curse, Cure Poison and Abolish Poison.
-          - Druid Macro Helper is listed as a recommended optional dependency and the installer reports whether DMH is loaded.
-          - The Druid WeakAuras package remains the only current class HUD package and is never offered to non-Druids.
-          - The seven-step guided installer remains Welcome → Macros → ElvUI → WeakAuras → Details → DBM → Reload.
+          - Embeds the supplied Plater and Details exports as the universal profiles used by every class.
+          - Plater keeps the supplied profile's tracking, scripts, sizing and gameplay behavior, then RetreatUI normalizes typography to Fira Sans Heavy and health/cast textures to ElvUI Norm.
+          - Details keeps the supplied profile/window setup, then RetreatUI applies Fira Sans Heavy, ElvUI Norm bars, compact spacing and the dark RetreatUI meter styling.
+          - ElvUI now follows the current character's class color for profile accents and unitframes.
+          - The stance/form bar remains at the bottom and is centered on the player frame at X -310.
+          - Class macro imports are strictly Character Specific Macros and never create, replace or reuse General Macro slots.
+          - The guided installer is now eight steps: Welcome → Macros → ElvUI → Plater → WeakAuras → Details → DBM → Reload.
+          - WeakAuras and Macros remain class-specific; ElvUI, Plater, Details and DBM are shared.
 
           This remains a testing prerelease.
           EOF

@@ -2,7 +2,7 @@ local RUI = RetreatUITBC
 if not RUI then return end
 
 -- TBC baseline mirrors the RetreatUI CoA ElvUI profile. TBC-only compatibility
--- repairs are applied at install time rather than changing the visual baseline.
+-- repairs and the current player's class accent are applied at install time.
 RUI.ElvUIProfile = {
   actionbar = {
     backdropSpacingConverted = true,
@@ -48,6 +48,7 @@ RUI.ElvUIProfile = {
     minimap = { size = 205 },
     normTex = "ElvUI Norm",
     totems = { growthDirection = "HORIZONTAL", size = 36, spacing = 2 },
+    -- Replaced with the player's actual class color by Profiles:ApplyElvUI().
     valuecolor = { a = 1, b = 0.04, g = 0.28, r = 1 },
     watchFrameHeight = 360,
   },
@@ -80,7 +81,8 @@ RUI.ElvUIProfile = {
     MinimapMover = "TOPRIGHT,ElvUIParent,TOPRIGHT,-5,-5",
     MirrorTimer1Mover = "TOP,ElvUIParent,TOP,-1,-96",
     ReputationBarMover = "TOPRIGHT,ElvUIParent,TOPRIGHT,-2,-215",
-    ShiftAB = "TOPLEFT,ElvUIParent,BOTTOMLEFT,649,32",
+    -- Keep the stance/form bar at the bottom, centered on the player frame.
+    ShiftAB = "BOTTOM,ElvUIParent,BOTTOM,-310,32",
     TempEnchantMover = "TOPRIGHT,ElvUIParent,TOPRIGHT,-215,-4",
     TimeManagerFrameMover = "TOPRIGHT,ElvUIParent,TOPRIGHT,-4,-234",
     TotemBarMover = "BOTTOM,ElvUIParent,BOTTOM,-314,259",
@@ -98,8 +100,12 @@ RUI.ElvUIProfile = {
       auraBarBuff = { b = 0.02, g = 0, r = 0.99 },
       castColor = { b = 0.08, g = 0.35, r = 0.86 },
       castNoInterrupt = { b = 0.12, g = 0.12, r = 0.58 },
+      colorhealthbyvalue = false,
+      -- Class-colored health is the source of truth. The static health color is
+      -- only a fallback and is replaced with the player's class color on import.
       health = { b = 0.115, g = 0.09, r = 0.085 },
-      healthReaction = false,
+      healthclass = true,
+      healthReaction = true,
       health_backdrop = { b = 0.018, g = 0.012, r = 0.012 },
     },
     font = "Fira Sans Heavy",
@@ -158,9 +164,9 @@ RUI.ElvUIProfile = {
         classbar = { enable = false, height = 0 },
         debuffs = { countFont = "Fira Sans Heavy", enable = false, maxDuration = 300, perrow = 4, priority = "", sizeOverride = 0 },
         disableMouseoverGlow = true,
-        health = { frequentUpdates = true, position = "RIGHT", text_format = "|cffff470a[health:current]|r", xOffset = -7 },
+        health = { frequentUpdates = true, position = "RIGHT", text_format = "[namecolor][health:current]", xOffset = -7 },
         height = 46,
-        name = { font = "Fira Sans Heavy", fontOutline = "OUTLINE", fontSize = 11, position = "LEFT", text_format = "|cffff470a[name:medium]|r", xOffset = 7 },
+        name = { font = "Fira Sans Heavy", fontOutline = "OUTLINE", fontSize = 11, position = "LEFT", text_format = "[namecolor][name:medium]", xOffset = 7 },
         orientation = "RIGHT",
         power = { attachTextTo = "Power", enable = false, height = 5, position = "CENTER", text_format = "", xOffset = 0 },
         width = 260,
@@ -189,9 +195,9 @@ RUI.ElvUIProfile = {
         castbar = { displayTarget = false, iconPosition = "RIGHT", insideInfoPanel = false, spark = false, width = 260 },
         debuffs = { anchorPoint = "TOPLEFT", attachTo = "FRAME", countFont = "Fira Sans Heavy", enable = false, perrow = 4, priority = "", sizeOverride = 0 },
         disableMouseoverGlow = true,
-        health = { frequentUpdates = true, position = "LEFT", text_format = "|cffff470a[health:current]|r", xOffset = 7 },
+        health = { frequentUpdates = true, position = "LEFT", text_format = "[namecolor][health:current]", xOffset = 7 },
         height = 46,
-        name = { font = "Fira Sans Heavy", fontOutline = "OUTLINE", fontSize = 11, position = "RIGHT", text_format = "|cffff470a[name:medium]|r", xOffset = -7 },
+        name = { font = "Fira Sans Heavy", fontOutline = "OUTLINE", fontSize = 11, position = "RIGHT", text_format = "[namecolor][name:medium]", xOffset = -7 },
         orientation = "LEFT",
         power = { attachTextTo = "Power", height = 4 },
         width = 260,
@@ -201,7 +207,7 @@ RUI.ElvUIProfile = {
         disableMouseoverGlow = true,
         health = { frequentUpdates = true, position = "CENTER", xOffset = 0 },
         height = 24,
-        name = { font = "Fira Sans Heavy", fontOutline = "OUTLINE", fontSize = 10, text_format = "|cffff470a[name:short]|r" },
+        name = { font = "Fira Sans Heavy", fontOutline = "OUTLINE", fontSize = 10, text_format = "[namecolor][name:short]" },
         power = { enable = false },
         raidicon = { size = 14, yOffset = 5 },
         threatStyle = "GLOW",
