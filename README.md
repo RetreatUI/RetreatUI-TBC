@@ -8,13 +8,14 @@ This repository is the standalone TBC edition of RetreatUI. It is intentionally 
 
 Beta. The Druid HUD is delivered as real WeakAuras displays created and updated by the RetreatUI installer through the WeakAuras data API. The old native Druid runtime has been removed.
 
-The three HUD layers are centered in the same screen space used by RetreatUI CoA between the ElvUI player and target frames:
+The three HUD layers use the same live RetreatUI CoA center-HUD geometry between the ElvUI player and target frames:
 
-- Resource bar: center X, HUD root +44 Y
-- Main ability row: center X, HUD root +12 Y
-- Utility row: center X, HUD root -25 Y
+- Resource bar: X 0 / Y -152, 360 × 16
+- Main ability row: X 0 / Y -183, 38 px icons
+- Utility row: X 0 / Y -224, 32 px icons
+- Ability spacing: 1 px
 
-With the default RetreatUI HUD root Y of 27, that resolves to Y 71, 39 and 2. The package tracks the current Druid power/form, learned spell ranks, cooldowns and player/target auras and verifies the installed WeakAuras hierarchy and geometry before the installer reports success.
+The WeakAuras package also uses the RetreatUI ElvUI font/texture family, follows the current Druid power/form, resolves learned ranks by spell name, tracks cooldowns and player/target auras, and verifies the installed WeakAuras hierarchy and root geometry before the installer reports success.
 
 ElvUI and Details integration are included. Plater remains optional and is only offered when an embedded profile is available.
 
