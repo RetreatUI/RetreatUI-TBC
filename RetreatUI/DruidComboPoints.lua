@@ -5,6 +5,7 @@ local PACKAGE = RUI.weakAuraPackages and RUI.weakAuraPackages.druid
 if not PACKAGE or type(PACKAGE.Build) ~= "function" then return end
 
 local ROOT = "RetreatUI TBC — Druid Combo Points"
+local ENERGY_ID = "RetreatUI TBC — Druid Resource — Energy"
 local COMBO_X, COMBO_Y = 0, -118
 local SEGMENT_WIDTH, SEGMENT_HEIGHT = 22, 8
 local SEGMENT_SPACING = 2
@@ -201,6 +202,15 @@ local OriginalBuild = PACKAGE.Build
 function PACKAGE:Build()
   local packageData = OriginalBuild(self)
   if type(packageData) ~= "table" then return packageData end
+
+  -- The old Energy bar had a numeric combo-point text appended to its right.
+  -- The dedicated segmented tracker is now the only combo-point display.
+  for _, display in ipairs(packageData.displays or {}) do
+    if display.id == ENERGY_ID and type(display.subRegions) == "table" and #display.subRegions >= 4 then
+      table.remove(display.subRegions, 4)
+      break
+    end
+  end
 
   local children = {}
   for index = 1, SEGMENTS do
