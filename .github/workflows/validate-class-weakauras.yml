@@ -1,0 +1,84 @@
+name: Validate TBC Class WeakAuras
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "RetreatUI/ClassWeakAuraData.lua"
+      - "RetreatUI/DruidComboPoints.lua"
+      - "RetreatUI/RogueComboPoints.lua"
+      - "RetreatUI/WeakAuraData.lua"
+      - "RetreatUI/WeakAuras.lua"
+      - "RetreatUI/RetreatUI.toc"
+      - ".github/workflows/validate-class-weakauras.yml"
+  push:
+    branches: [main]
+    paths:
+      - "RetreatUI/ClassWeakAuraData.lua"
+      - "RetreatUI/DruidComboPoints.lua"
+      - "RetreatUI/RogueComboPoints.lua"
+      - "RetreatUI/WeakAuraData.lua"
+      - "RetreatUI/WeakAuras.lua"
+      - "RetreatUI/RetreatUI.toc"
+      - ".github/workflows/validate-class-weakauras.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+
+      - name: Validate Lua and package contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          luac5.1 -p RetreatUI/WeakAuraData.lua
+          luac5.1 -p RetreatUI/ClassWeakAuraData.lua
+          luac5.1 -p RetreatUI/DruidComboPoints.lua
+          luac5.1 -p RetreatUI/RogueComboPoints.lua
+          luac5.1 -p RetreatUI/WeakAuras.lua
+
+          grep -q '^ClassWeakAuraData.lua$' RetreatUI/RetreatUI.toc
+          grep -q '^DruidComboPoints.lua$' RetreatUI/RetreatUI.toc
+          grep -q '^RogueComboPoints.lua$' RetreatUI/RetreatUI.toc
+
+          # The Druid geometry is the immutable reference layout.
+          grep -q 'COA_RESOURCE_X, COA_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_MAIN_X, COA_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_RESOURCE_WIDTH, COA_RESOURCE_HEIGHT = 360, 16' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_MAIN_ICON, COA_UTILITY_ICON = 38, 32' RetreatUI/WeakAuraData.lua
+          grep -q 'COA_ICON_SPACING = 1' RetreatUI/WeakAuraData.lua
+
+          # Every other TBC class must use the exact same geometry.
+          grep -q 'RESOURCE_X, RESOURCE_Y = 0, -152' RetreatUI/ClassWeakAuraData.lua
+          grep -q 'MAIN_X, MAIN_Y = 0, -183' RetreatUI/ClassWeakAuraData.lua
+          grep -q 'UTILITY_X, UTILITY_Y = 0, -224' RetreatUI/ClassWeakAuraData.lua
+          grep -q 'RESOURCE_WIDTH, RESOURCE_HEIGHT = 360, 16' RetreatUI/ClassWeakAuraData.lua
+          grep -q 'MAIN_ICON, UTILITY_ICON = 38, 32' RetreatUI/ClassWeakAuraData.lua
+          grep -q 'ICON_SPACING = 1' RetreatUI/ClassWeakAuraData.lua
+
+          for class in HUNTER MAGE PALADIN PRIEST ROGUE SHAMAN WARLOCK WARRIOR; do
+            grep -q "  $class = {" RetreatUI/ClassWeakAuraData.lua
+          done
+
+          for key in hunter mage paladin priest rogue shaman warlock warrior; do
+            grep -q "key = \"$key\"" RetreatUI/ClassWeakAuraData.lua
+          done
+
+          # Combo-point classes share the same lane between procs and resource.
+          grep -q 'COMBO_X, COMBO_Y = 0, -118' RetreatUI/DruidComboPoints.lua
+          grep -q 'SEGMENTS = 5' RetreatUI/DruidComboPoints.lua
+          grep -q 'COMBO_X, COMBO_Y = 0, -118' RetreatUI/RogueComboPoints.lua
+          grep -q 'SEGMENTS = 5' RetreatUI/RogueComboPoints.lua
+          grep -q 'GetComboPoints("player", "target")' RetreatUI/RogueComboPoints.lua
+
+          # Class selection stays automatic and only installs the current class.
+          grep -q 'local function CurrentPackage' RetreatUI/WeakAuras.lua
+          grep -q 'local key = class and class:lower()' RetreatUI/WeakAuras.lua
+          grep -q 'function WeakAurasModule:InstallClassHUD' RetreatUI/WeakAuras.lua
