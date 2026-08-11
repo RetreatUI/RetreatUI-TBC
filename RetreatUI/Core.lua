@@ -82,6 +82,14 @@ events:SetScript("OnEvent", function(_, event, arg1)
 end)
 
 SLASH_RETREATUITBC1 = "/ruitbc"
-SlashCmdList.RETREATUITBC = function()
-  if RUI.OpenInstaller then RUI:OpenInstaller() end
+SlashCmdList.RETREATUITBC = function(msg)
+  msg = strtrim(msg or ""):lower()
+  if msg == "reset" then
+    RetreatUITBCDB = nil
+    RUI:EnsureDB()
+    RUI:Print("Settings reset. Reloading UI.")
+    ReloadUI()
+  elseif RUI.OpenInstaller then
+    RUI.OpenInstaller()
+  end
 end
