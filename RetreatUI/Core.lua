@@ -4,7 +4,7 @@ RetreatUITBC = RetreatUITBC or {}
 local RUI = RetreatUITBC
 
 RUI.name = addonName
-RUI.version = "0.1.0-beta.16"
+RUI.version = "0.1.0-beta.17"
 RUI.modules = RUI.modules or {}
 RUI.profilePayloads = RUI.profilePayloads or {}
 RUI.weakAuraPackages = RUI.weakAuraPackages or {}
@@ -82,14 +82,6 @@ events:SetScript("OnEvent", function(_, event, arg1)
 end)
 
 SLASH_RETREATUITBC1 = "/ruitbc"
-SlashCmdList.RETREATUITBC = function(msg)
-  msg = strtrim(msg or ""):lower()
-  if msg == "reset" then
-    RetreatUITBCDB = nil
-    RUI:EnsureDB()
-    RUI:Print("Settings reset. Reloading UI.")
-    ReloadUI()
-  elseif RUI.OpenInstaller then
-    RUI.OpenInstaller()
-  end
+SlashCmdList.RETREATUITBC = function()
+  if RUI.OpenInstaller then RUI:OpenInstaller() end
 end
