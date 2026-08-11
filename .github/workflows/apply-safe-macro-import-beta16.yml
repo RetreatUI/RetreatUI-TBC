@@ -21,9 +21,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 .github/scripts/apply_safe_macro_import_beta16.py
+          python3 .github/scripts/apply_safe_macro_import_beta16_v2.py
           git config user.name "Retreat"
           git config user.email "gaarn94@gmail.com"
-          git add RetreatUI/Macros.lua RetreatUI/Installer.lua RetreatUI/Core.lua RetreatUI/RetreatUI.toc .github/release-manifest.json .github/workflows/publish-beta.yml
+          git add RetreatUI/Macros.lua RetreatUI/Installer.lua RetreatUI/Core.lua RetreatUI/RetreatUI.toc .github/release-manifest.json
           git commit -m "Preserve existing macros on reinstall"
           git push origin HEAD:agent/preserve-existing-macros-beta16
