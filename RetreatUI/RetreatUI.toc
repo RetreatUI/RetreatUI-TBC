@@ -19,6 +19,7 @@ DetailsPersistenceFix.lua
 DetailsSimpleImport.lua
 TBCClassData.lua
 TBCClassHUD.lua
+TBCClassMechanics.lua
 GeneralWeakAuraData.lua
 GeneralPlacementFix.lua
 GeneralSwingTimer.lua
