@@ -29,6 +29,10 @@ RUI.tbcClassData = {
       {name="Challenging Roar",spell=5209},
       {name="Hurricane",spell=16914},
     },
+    reminders = {
+      {mode="buffAny",text="MISSING MARK OF THE WILD",spellIds={1126,21849}},
+      {mode="buffAny",text="MISSING THORNS",spellIds={467}},
+    },
     utility = {
       {name="Dash",id=9821,kind="spell"},
       {name="Cower",id=31709,kind="spell"},
@@ -56,6 +60,10 @@ RUI.tbcClassData = {
       {name="Counterattack",spell=19306},
       {name="Wyvern Sting",spell=19386},
     },
+    reminders = {
+      {mode="aspect",text="NO ASPECT"},
+      {mode="petMissing",text="NO PET"},
+    },
     utility = {
       {name="Tranquilizing Shot",id=19801,kind="spell"},
       {name="Scare Beast",id=1513,kind="spell"},
@@ -71,6 +79,9 @@ RUI.tbcClassData = {
   MAGE = {
     power = {0},
     main = {
+      {name="Fire Vulnerability",spell=22959,auraOnly=true,auras={22959},unit="target",loadSpell=false},
+      {name="Winter's Chill",spell=28595,auraOnly=true,auras={28595},unit="target",loadSpell=false},
+      {name="Ignite",spell=12847,auraOnly=true,auras={12847},unit="target",loadSpell=false},
       {name="Fire Blast",spell=10199},
       {name="Frost Nova",spell=10230},
       {name="Blink",spell=1953},
@@ -87,6 +98,10 @@ RUI.tbcClassData = {
       {name="Cold Snap",spell=11958},
       {name="Ice Barrier",spell=11426},
       {name="Ice Block",spell=45438},
+    },
+    reminders = {
+      {mode="buffAny",text="MISSING ARCANE INTELLECT",spellIds={1459,23028}},
+      {mode="buffAny",text="MISSING MAGE ARMOR",spellIds={168,7302,6117,30482}},
     },
     utility = {
       {name="Invisibility",id=66,kind="spell"},
@@ -119,6 +134,9 @@ RUI.tbcClassData = {
       {name="Repentance",spell=20066},
       {name="Divine Favor",spell=20216},
     },
+    reminders = {
+      {mode="buffPrefix",text="MISSING BLESSING",prefixes={"Blessing of ","Greater Blessing of "}},
+    },
     utility = {
       {name="Turn Undead",id=5627,kind="spell"},
       {name="Turn Evil",id=10326,kind="spell"},
@@ -128,6 +146,10 @@ RUI.tbcClassData = {
   PRIEST = {
     power = {0},
     main = {
+      {name="Shadow Word: Pain",spell=589,auraOnly=true,auras={589},unit="target"},
+      {name="Vampiric Touch",spell=34917,auraOnly=true,auras={34917},unit="target"},
+      {name="Holy Fire",spell=14914,auraOnly=true,auras={14914},unit="target"},
+      {name="Vampiric Embrace",spell=15286,auraOnly=true,auras={15286},unit="target"},
       {name="Mind Blast",spell=10947},
       {name="Power Word: Shield",spell=10901},
       {name="Power Infusion",spell=10060},
@@ -144,6 +166,10 @@ RUI.tbcClassData = {
       {name="Shadowfiend",spell=34433},
       {name="Pain Suppression",spell=33206},
     },
+    reminders = {
+      {mode="buffAny",text="MISSING FORTITUDE",spellIds={1243,21562}},
+      {mode="buffAny",text="MISSING INNER FIRE",spellIds={588}},
+    },
     utility = {
       {name="Consume Magic",id=32676,kind="spell"},
       {name="Fear Ward",id=6346,kind="spell"},
@@ -152,7 +178,7 @@ RUI.tbcClassData = {
   ROGUE = {
     power = {3},
     main = {
-      {name="Slice and Dice",spell=5171,auraOnly=true},
+      {name="Slice and Dice",spell=5171,auraOnly=true,auras={5171},unit="player"},
       {name="Rupture",spell=8640,auraOnly=true,auras={8640},unit="target"},
       {name="Adrenaline Rush",spell=13750},
       {name="Cold Blood",spell=14177},
@@ -169,6 +195,10 @@ RUI.tbcClassData = {
       {name="Blind",spell=2094},
       {name="Vanish",spell=1857},
       {name="Shadowstep",spell=36554},
+    },
+    reminders = {
+      {mode="weaponEnchant",hand="main",text="MISSING MH POISON"},
+      {mode="weaponEnchant",hand="off",text="MISSING OH POISON"},
     },
     utility = {
       {name="Feint",id=25302,kind="spell"},
@@ -189,6 +219,10 @@ RUI.tbcClassData = {
       {name="Mana Tide Totem",spell=16190},
       {name="Elemental Mastery",spell=16166},
     },
+    reminders = {
+      {mode="weaponEnchant",hand="main",text="MISSING WEAPON IMBUE"},
+      {mode="buffAny",text="MISSING ELEMENTAL SHIELD",spellIds={324,24398,974}},
+    },
     utility = {
       {name="Fire Elemental Totem",id=2894,kind="spell"},
       {name="Earth Elemental Totem",id=2062,kind="spell"},
@@ -206,20 +240,25 @@ RUI.tbcClassData = {
     main = {
       {name="Corruption",spell=172,auraOnly=true,auras={172},unit="target"},
       {name="Curses",spell=980,auraOnly=true,auras={980,702,1714,1490,17862,603,704,18223},unit="target"},
+      {name="Immolate",spell=348,auraOnly=true,auras={348},unit="target"},
       {name="Amplify Curse",spell=18288},
       {name="Siphon Life",spell=18265,auraOnly=true,auras={18265},unit="target"},
       {name="Shadowburn",spell=17877},
       {name="Shadowfury",spell=30283},
-      {name="Fear",spell=6215},
-      {name="Pets • Seduction",spell=6358},
-      {name="Pets • Spell Lock",spell=19647},
-      {name="Pets • Suffering",spell=17735},
+      {name="Fear",spell=5782,auraOnly=true,auras={5782},unit="target"},
+      {name="Pets • Seduction",spell=6358,loadSpell=712},
+      {name="Pets • Spell Lock",spell=19244,loadSpell=691},
+      {name="Pets • Suffering",spell=17735,loadSpell=697},
       {name="Conflagrate",spell=17962},
       {name="Summon Infernal",spell=1122},
       {name="Death Coil",spell=17926},
       {name="Howl of Terror",spell=17928},
       {name="Soul Fire",spell=6353},
       {name="Shadow Ward",spell=6229},
+    },
+    reminders = {
+      {mode="buffAny",text="MISSING DEMON ARMOR",spellIds={696,706,28176}},
+      {mode="warlockPet",text="NO DEMON"},
     },
     utility = {
       {name="Soulstone",id=20765,kind="aura"},
@@ -232,34 +271,40 @@ RUI.tbcClassData = {
   WARRIOR = {
     power = {1},
     main = {
+      {name="Sunder Armor",spell=7386,auraOnly=true,auras={7405},unit="target"},
       {name="Mortal Strike",spell=21553},
       {name="Bloodthirst",spell=23881},
-      {name="Revenge",spell=11601},
+      {name="Revenge",form=2,spell=11601},
       {name="Charge",spell=11578},
-      {name="Shield Block",spell=2565},
-      {name="Pummel",spell=6554},
-      {name="Thunder Clap",spell=6343},
+      {name="Shield Block",form=2,spell=2565},
+      {name="Pummel",form=3,spell=6554},
+      {name="Thunder Clap",forms={1,2},spell=6343},
       {name="Taunt",spell=355},
       {name="Death Wish",spell=12292},
-      {name="Sweeping Strikes",spell=12328},
+      {name="Sweeping Strikes",form=2,spell=12328},
       {name="Bloodrage",spell=2687},
-      {name="Whirlwind",spell=1680},
-      {name="Spell Reflection",spell=23920},
-      {name="Intercept",spell=20617},
-      {name="Intervene",spell=3411},
-      {name="Mocking Blow",spell=20560},
-      {name="Berserker Rage",spell=18499},
+      {name="Whirlwind",form=3,spell=1680},
+      {name="Spell Reflection",form=2,spell=23920},
+      {name="Intercept",form=3,spell=20617},
+      {name="Intervene",form=2,spell=3411},
+      {name="Mocking Blow",form=1,spell=20560},
+      {name="Berserker Rage",form=3,spell=18499},
       {name="Intimidating Shout",spell=5246},
       {name="Disarm",spell=676},
       {name="Challenging Shout",spell=1161},
       {name="Shield Bash",spell=1672},
-      {name="Recklessness",spell=1719},
-      {name="Shield Wall",spell=871},
+      {name="Recklessness",form=3,spell=1719},
+      {name="Shield Wall",form=2,spell=871},
       {name="Concussion Blow",spell=12809},
       {name="Last Stand",spell=12975},
-      {name="Retaliation",spell=20230},
-      {name="Overpower",spell=11585},
+      {name="Retaliation",form=1,spell=20230},
+      {name="Overpower",form=1,spell=11585},
       {name="Rend",spell=11574,auraOnly=true,auras={11574},unit="target"},
+    },
+    reminders = {
+      {mode="buffAny",text="NO SHOUT",spellIds={6673,469}},
+      {mode="stance",text="STANCE"},
+      {mode="execute",text="EXECUTE"},
     },
     utility = {},
   },
