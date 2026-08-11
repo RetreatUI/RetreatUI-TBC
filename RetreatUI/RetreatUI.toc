@@ -29,3 +29,4 @@ GeneralWeakAuras.lua
 Macros.lua
 MacroScopeFix.lua
 Installer.lua
+InstallerClassNativeText.lua
