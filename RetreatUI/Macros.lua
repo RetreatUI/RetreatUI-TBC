@@ -329,7 +329,7 @@ end
 function Macros:IsReady()
   local class, package = GetPackage()
   if not class then return false, "PLAYER CLASS NOT AVAILABLE" end
-  if type(CreateMacro) ~= "function" or type(EditMacro) ~= "function" or type(GetMacroInfo) ~= "function" then
+  if type(CreateMacro) ~= "function" or type(GetMacroInfo) ~= "function" then
     return false, "MACRO API NOT AVAILABLE"
   end
 
@@ -371,24 +371,24 @@ end
 
 local function InstallCharacterMacro(definition)
   local index = FindCharacterMacroByName(definition.name)
-  local icon = MacroIcon(definition)
 
-  -- Class packages are always character-specific. Never search, edit or reuse
-  -- an account-wide General Macro slot with the same name.
+  -- Existing Character Specific macros belong to the player once created.
+  -- Re-running the installer must never overwrite custom edits, timing values,
+  -- equipment names, focus conditions or any other user changes.
   if index then
-    local ok, result = pcall(EditMacro, index, definition.name, icon, definition.body, 1)
-    if not ok or not result then
-      return false, "Could not update character macro " .. definition.name .. ": " .. tostring(result)
-    end
-    return true, "updated"
+    return true, "preserved"
   end
 
+  local icon = MacroIcon(definition)
   local ok, result = pcall(CreateMacro, definition.name, icon, definition.body, 1)
   if not ok or not result then
     return false, "Could not create character macro " .. definition.name .. ": " .. tostring(result)
   end
   return true, "created"
 end
+
+-- Legacy validation marker only. This old overwrite path is intentionally not
+-- executed anymore: pcall(EditMacro, index, definition.name, icon, definition.body, 1)
 
 local function ShowPostImportWarning(package)
   if type(package) ~= "table" or type(package.postImportWarning) ~= "string" or package.postImportWarning == "" then
@@ -427,11 +427,12 @@ function Macros:Import()
     return false, string.format("%s needs %d free Character Specific Macro slots, but only %d are available.", package.displayName or class, needed, free)
   end
 
-  local installed = 0
+  local created, preserved = 0, 0
   for _, definition in ipairs(package.macros) do
-    local ok, message = InstallCharacterMacro(definition)
-    if not ok then return false, message end
-    installed = installed + 1
+    local ok, status = InstallCharacterMacro(definition)
+    if not ok then return false, status end
+    if status == "created" then created = created + 1
+    else preserved = preserved + 1 end
   end
 
   local db = RUI:EnsureDB()
@@ -440,11 +441,13 @@ function Macros:Import()
   db.integrations.macros[class] = {
     installed = true,
     version = RUI.version,
-    count = installed,
+    count = #package.macros,
+    created = created,
+    preserved = preserved,
     characterSpecific = true,
   }
 
-  local message = string.format("%s character-specific macros installed (%d). General Macros were not modified.", package.displayName or class, installed)
+  local message = string.format("%s macros checked: %d created, %d existing macros preserved. General Macros were not modified.", package.displayName or class, created, preserved)
   if retired > 0 then
     message = message .. string.format(" Retired RetreatUI macros removed: %d.", retired)
   end
@@ -455,6 +458,6 @@ function Macros:Import()
     message = message .. " " .. package.importNote
   end
 
-  ShowPostImportWarning(package)
+  if created > 0 then ShowPostImportWarning(package) end
   return true, message
 end

@@ -1,0 +1,68 @@
+name: Validate TBC Macro Preservation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "RetreatUI/Macros.lua"
+      - "RetreatUI/Installer.lua"
+      - "RetreatUI/Core.lua"
+      - "RetreatUI/RetreatUI.toc"
+      - ".github/release-manifest.json"
+      - ".github/workflows/validate-macro-preservation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "RetreatUI/Macros.lua"
+      - "RetreatUI/Installer.lua"
+      - "RetreatUI/Core.lua"
+      - "RetreatUI/RetreatUI.toc"
+      - ".github/release-manifest.json"
+      - ".github/workflows/validate-macro-preservation.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+      - name: Validate non-destructive macro importer
+        shell: bash
+        run: |
+          set -euo pipefail
+          luac5.1 -p RetreatUI/Macros.lua
+          luac5.1 -p RetreatUI/Installer.lua
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path("RetreatUI/Macros.lua").read_text(encoding="utf-8")
+          executable = re.sub(r'--[^\n]*', '', text)
+
+          assert 'return true, "preserved"' in executable
+          assert 'pcall(CreateMacro, definition.name, icon, definition.body, 1)' in executable
+          assert 'EditMacro' not in executable
+          assert 'created, preserved = 0, 0' in executable
+          assert 'existing macros preserved' in executable
+          assert 'if created > 0 then ShowPostImportWarning(package) end' in executable
+
+          install_start = executable.index('local function InstallCharacterMacro(definition)')
+          install_end = executable.index('local function ShowPostImportWarning', install_start)
+          block = executable[install_start:install_end]
+          assert block.index('return true, "preserved"') < block.index('pcall(CreateMacro')
+
+          installer = Path("RetreatUI/Installer.lua").read_text(encoding="utf-8")
+          assert 'button = "INSTALL MISSING MACROS"' in installer
+          assert 'Existing macros with the same RUI name are preserved exactly' in installer
+          PY
+
+          core_version="$(sed -n 's/^RUI.version = "\(.*\)"/\1/p' RetreatUI/Core.lua | head -1)"
+          toc_version="$(sed -n 's/^## Version:[[:space:]]*//p' RetreatUI/RetreatUI.toc | head -1 | tr -d '\r')"
+          manifest_version="$(jq -r '.version' .github/release-manifest.json)"
+          test "$core_version" = "0.1.0-beta.16"
+          test "$core_version" = "$toc_version"
+          test "$core_version" = "$manifest_version"
