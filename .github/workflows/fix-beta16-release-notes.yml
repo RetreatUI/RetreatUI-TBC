@@ -1,0 +1,38 @@
+name: Correct TBC beta16 release notes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-beta16-release-notes.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update beta16 release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/notes.md <<'EOF'
+          RetreatUI TBC beta 16.
+
+          Includes:
+          - Makes the class macro installer safe to run repeatedly.
+          - Existing Character Specific `RUI ...` macros are preserved exactly and are never overwritten by a reinstall.
+          - Only missing class macros are created.
+          - User-edited Hunter timing values, equipment names, targeting conditions and other custom macro changes survive future installer runs.
+          - General Macro slots remain untouched.
+          - The installer button now clearly says `INSTALL MISSING MACROS`.
+          - Hunter post-import warnings only appear when at least one macro was actually created.
+          - Adds regression validation that rejects executable `EditMacro` usage from the installer path.
+          - Existing WeakAuras, ElvUI, Plater, Details, DBM and HUD behavior is unchanged.
+
+          This remains a testing prerelease.
+          EOF
+          gh release edit v0.1.0-beta.16 --repo RetreatUI/RetreatUI-TBC --title "RetreatUI TBC 0.1.0-beta.16" --notes-file /tmp/notes.md --prerelease
