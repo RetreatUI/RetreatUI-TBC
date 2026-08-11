@@ -1,16 +1,18 @@
-name: Publish RetreatUI TBC Beta
+name: Validate and Publish RetreatUI TBC
 
 on:
   push:
     branches: [main]
     paths:
       - "RetreatUI/**"
+      - "tests/**"
       - ".github/release-manifest.json"
       - ".github/workflows/publish-beta.yml"
   pull_request:
     branches: [main]
     paths:
       - "RetreatUI/**"
+      - "tests/**"
       - ".github/release-manifest.json"
       - ".github/workflows/publish-beta.yml"
   workflow_dispatch:
@@ -19,19 +21,30 @@ permissions:
   contents: write
 
 concurrency:
-  group: retreatui-tbc-beta-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  group: retreatui-tbc-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  package:
-    name: Validate and publish TBC beta
+  validate-and-package:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Read manifest
-        id: manifest
+      - name: Install validation tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1 zip
+
+      - name: Validate Lua 5.1 syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find RetreatUI tests -type f -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+
+      - name: Validate versions and package structure
         shell: bash
         run: |
           set -euo pipefail
@@ -39,38 +52,27 @@ jobs:
           TITLE="$(jq -r '.title' .github/release-manifest.json)"
           PUBLISH="$(jq -r '.publish' .github/release-manifest.json)"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
-          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "asset=RetreatUI_TBC_v$VERSION.zip" >> "$GITHUB_OUTPUT"
-
-      - name: Install Lua 5.1 compiler
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq lua5.1
-
-      - name: Validate Lua syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          find RetreatUI -type f -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
-
-      - name: Validate addon
-        shell: bash
-        env:
-          VERSION: ${{ steps.manifest.outputs.version }}
-        run: |
-          set -euo pipefail
-
-          test -f RetreatUI/RetreatUI.toc
           grep -q "^## Author: Retreat$" RetreatUI/RetreatUI.toc
           grep -q "^## Version: $VERSION$" RetreatUI/RetreatUI.toc
           grep -q "RUI.version = \"$VERSION\"" RetreatUI/Core.lua
 
-          required_files=(
+          python3 - <<'PY'
+          from pathlib import Path
+          toc = Path('RetreatUI/RetreatUI.toc')
+          root = toc.parent
+          missing = []
+          for raw in toc.read_text(encoding='utf-8-sig').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#'):
+                  continue
+              candidate = root / line.replace('\\', '/')
+              if not candidate.is_file():
+                  missing.append(str(candidate))
+          if missing:
+              raise SystemExit('Missing TOC files: ' + ', '.join(missing))
+          PY
+
+          required=(
             Core.lua
             CoAElvUIProfile.lua
             ProfilePayloadPlater1.lua
@@ -81,260 +83,134 @@ jobs:
             Profiles.lua
             DetailsPersistenceFix.lua
             DetailsSimpleImport.lua
-            WeakAuraData.lua
-            ClassWeakAuraData.lua
-            DruidComboPoints.lua
-            RogueComboPoints.lua
+            TBCClassData.lua
+            TBCClassHUD.lua
+            TBCClassMechanics.lua
             GeneralWeakAuraData.lua
             GeneralPlacementFix.lua
+            GeneralSwingTimer.lua
+            GeneralSwingPlacement.lua
             WeakAuras.lua
             GeneralWeakAuras.lua
             Macros.lua
+            MacroScopeFix.lua
             Installer.lua
+            InstallerClassNativeText.lua
           )
-
-          for file in "${required_files[@]}"; do
+          for file in "${required[@]}"; do
             test -s "RetreatUI/$file"
-            grep -q "^$file$" RetreatUI/RetreatUI.toc
+            grep -Fxq "$file" RetreatUI/RetreatUI.toc
           done
 
-          ! test -e RetreatUI/DruidRuntime.lua
-          ! grep -q '^DruidRuntime.lua$' RetreatUI/RetreatUI.toc
-          ! grep -R 'weakAuraPayloads\|WeakAuras.Import' RetreatUI
-          ! grep -R "OpenAI\|ChatGPT" RetreatUI
+          for retired in WeakAuraData.lua ClassWeakAuraData.lua DruidComboPoints.lua RogueComboPoints.lua DruidRuntime.lua; do
+            ! test -e "RetreatUI/$retired"
+            ! grep -Fxq "$retired" RetreatUI/RetreatUI.toc
+          done
 
-          # Supplied profile exports must stay embedded byte-for-byte.
+          ! grep -R "OpenAI\|ChatGPT" RetreatUI
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TITLE=$TITLE" >> "$GITHUB_ENV"
+          echo "PUBLISH=$PUBLISH" >> "$GITHUB_ENV"
+
+      - name: Validate class-native HUD runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          lua5.1 tests/validate-class-hud.lua
+
+          grep -Fq 'local COMBO_X, COMBO_Y = 0, -118' RetreatUI/TBCClassHUD.lua
+          grep -Fq 'powertype=4' RetreatUI/TBCClassHUD.lua
+          grep -Fq 'PLAYER_TOTEM_UPDATE' RetreatUI/TBCClassHUD.lua
+          grep -Fq 'GetItemCount(6265)' RetreatUI/TBCClassHUD.lua
+          grep -Fq 'Energy Tick' RetreatUI/TBCClassHUD.lua
+          grep -Fq 'Five Second Rule' RetreatUI/TBCClassHUD.lua
+          grep -Fq 'Stance/Form/Aura' RetreatUI/TBCClassMechanics.lua
+          grep -Fq 'MISSING MH POISON' RetreatUI/TBCClassData.lua
+          grep -Fq 'MISSING WEAPON IMBUE' RetreatUI/TBCClassData.lua
+          grep -Fq 'NO ASPECT' RetreatUI/TBCClassData.lua
+          grep -Fq 'Soulstone' RetreatUI/TBCClassData.lua
+
+      - name: Validate General HUD and macro safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'local ROOT = "RetreatUI - General"' RetreatUI/GeneralWeakAuraData.lua
+          grep -Fq 'GENERAL_PROC_X, GENERAL_PROC_Y = 0, -83' RetreatUI/GeneralWeakAuraData.lua
+          grep -Fq 'GENERAL_ICON_SIZE = 30' RetreatUI/GeneralWeakAuraData.lua
+          grep -Fq 'GENERAL_ICON_SPACING = 3' RetreatUI/GeneralWeakAuraData.lua
+          grep -Fq 'CreateMacro, name, icon, body, true' RetreatUI/MacroScopeFix.lua
+          grep -Fq 'FindGeneral' RetreatUI/MacroScopeFix.lua
+          grep -Fq 'FindCharacter' RetreatUI/MacroScopeFix.lua
+          grep -Fq 'DeleteMacro, generalIndex' RetreatUI/MacroScopeFix.lua
+          ! grep -Fq 'EditMacro' RetreatUI/MacroScopeFix.lua
+
+          python3 - <<'PY'
+          from pathlib import Path
+          lines = [x.strip() for x in Path('RetreatUI/RetreatUI.toc').read_text().splitlines()]
+          assert lines.index('Macros.lua') < lines.index('MacroScopeFix.lua') < lines.index('Installer.lua')
+          text = Path('RetreatUI/Macros.lua').read_text(encoding='utf-8')
+          for cls in ('DRUID','HUNTER','MAGE','PALADIN','PRIEST','ROGUE','SHAMAN','WARLOCK','WARRIOR'):
+              assert f'  {cls} = {{' in text, cls
+          PY
+
+      - name: Verify embedded profile payloads
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           from hashlib import sha256
 
           def payload(path):
-              text = Path(path).read_text(encoding="utf-8")
-              return text.split("[=[", 1)[1].rsplit("]=]", 1)[0]
+              text = Path(path).read_text(encoding='utf-8')
+              return text.split('[=[', 1)[1].rsplit(']=]', 1)[0]
 
-          plater = "".join(payload(f"RetreatUI/ProfilePayloadPlater{i}.lua") for i in range(1, 5))
-          details = payload("RetreatUI/ProfilePayloadDetails.lua")
-
-          assert len(plater) == 63086, len(plater)
-          assert plater.startswith("!PLATER:2!")
-          assert sha256(plater.encode()).hexdigest() == "a89a4a2638d7a911e2579e23545f60d02894dd0ea66e70b6a710e2b9c3700ba8"
-
-          assert len(details) == 10736, len(details)
-          assert details.startswith("D!ProfileV2-")
-          assert sha256(details.encode()).hexdigest() == "a15cfe79ff72272f0f03a0f2118c17fc914a29625d825d1f16f960163fce250b"
+          plater = ''.join(payload(f'RetreatUI/ProfilePayloadPlater{i}.lua') for i in range(1, 5))
+          details = payload('RetreatUI/ProfilePayloadDetails.lua')
+          assert len(plater) == 63086
+          assert plater.startswith('!PLATER:2!')
+          assert sha256(plater.encode()).hexdigest() == 'a89a4a2638d7a911e2579e23545f60d02894dd0ea66e70b6a710e2b9c3700ba8'
+          assert len(details) == 10736
+          assert details.startswith('D!ProfileV2-')
+          assert sha256(details.encode()).hexdigest() == 'a15cfe79ff72272f0f03a0f2118c17fc914a29625d825d1f16f960163fce250b'
           PY
 
-          # Class HUD geometry stays identical to CoA.
-          grep -q 'local function CurrentPackage' RetreatUI/WeakAuras.lua
-          grep -q 'function WeakAurasModule:InstallClassHUD' RetreatUI/WeakAuras.lua
-          grep -q 'COA_RESOURCE_X, COA_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
-          grep -q 'COA_MAIN_X, COA_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
-          grep -q 'COA_UTILITY_X, COA_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
-          grep -q 'RESOURCE_X, RESOURCE_Y = 0, -152' RetreatUI/ClassWeakAuraData.lua
-          grep -q 'MAIN_X, MAIN_Y = 0, -183' RetreatUI/ClassWeakAuraData.lua
-          grep -q 'UTILITY_X, UTILITY_Y = 0, -224' RetreatUI/ClassWeakAuraData.lua
-
-          # Druid and Rogue combo points stay in the shared -118 lane.
-          grep -q 'COMBO_X, COMBO_Y = 0, -118' RetreatUI/DruidComboPoints.lua
-          grep -q 'SEGMENTS = 5' RetreatUI/DruidComboPoints.lua
-          grep -q 'COMBO_X, COMBO_Y = 0, -118' RetreatUI/RogueComboPoints.lua
-          grep -q 'SEGMENTS = 5' RetreatUI/RogueComboPoints.lua
-
-          # Universal RetreatUI - General category remains at the supplied CoA positions.
-          grep -q 'local ROOT = "RetreatUI - General"' RetreatUI/GeneralWeakAuraData.lua
-          grep -q 'GENERAL_PROC_X, GENERAL_PROC_Y = 0, -83' RetreatUI/GeneralWeakAuraData.lua
-          grep -q 'GENERAL_ICON_SIZE = 30' RetreatUI/GeneralWeakAuraData.lua
-          grep -q 'GENERAL_ICON_SPACING = 3' RetreatUI/GeneralWeakAuraData.lua
-          grep -q 'TRINKET_FRAME = "ElvUF_Player"' RetreatUI/GeneralPlacementFix.lua
-          grep -q 'TRINKET_ANCHOR = "TOPRIGHT"' RetreatUI/GeneralPlacementFix.lua
-          grep -q 'TRINKET_SELF = "BOTTOMRIGHT"' RetreatUI/GeneralPlacementFix.lua
-          grep -q 'TRINKET_X = -17' RetreatUI/GeneralPlacementFix.lua
-          grep -q 'TRINKET_Y = 1' RetreatUI/GeneralPlacementFix.lua
-
-          # Every TBC class must have a Character Specific macro package.
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          text = Path("RetreatUI/Macros.lua").read_text(encoding="utf-8")
-          classes = ["DRUID", "HUNTER", "MAGE", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR"]
-          expected = {
-              "DRUID": 18,
-              "HUNTER": 8,
-              "MAGE": 14,
-              "PALADIN": 12,
-              "PRIEST": 14,
-              "ROGUE": 8,
-              "SHAMAN": 12,
-              "WARLOCK": 8,
-              "WARRIOR": 17,
-          }
-
-          for index, cls in enumerate(classes):
-              start = text.index(f"  {cls} = {{")
-              if index + 1 < len(classes):
-                  end = text.index(f"  {classes[index + 1]} = {{", start)
-              else:
-                  end = text.index("\n}\n\nlocal function CurrentClass", start)
-              block = text[start:end]
-              assert "characterSpecific = true" in block, cls
-              count = len(re.findall(r'^\s+(?:Macro|MouseoverMacro|HostileMouseoverMacro)\(', block, re.M))
-              assert count == expected[cls], (cls, count, expected[cls])
-
-          assert 'local MACRO_NAME_LIMIT = 16' in text
-          assert 'local MACRO_BODY_LIMIT = 255' in text
-          assert 'MAX_ACCOUNT_MACROS' in text
-          assert 'MAX_CHARACTER_MACROS' in text
-          assert 'FindCharacterMacroByName' in text
-          assert 'GetMacroIndexByName' not in text
-          assert 'pcall(CreateMacro, definition.name, icon, definition.body, 1)' in text
-          assert 'pcall(EditMacro, index, definition.name, icon, definition.body, 1)' in text
-          assert 'General Macros were not modified.' in text
-          PY
-
-          # Druid: preserve DMH macros, healing/dispels and all supplied utility templates.
-          grep -q 'recommendedAddon = "DruidMacroHelper"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI Powershift"' RetreatUI/Macros.lua
-          grep -q '/dmh cd pot supersapper' RetreatUI/Macros.lua
-          grep -q '/dmh cd supersapper' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI HealingTouch"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI AbolPoison"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI StarfireCD"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI FeralCharge"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI NSHeal", 17116' RetreatUI/Macros.lua
-
-          # Priest and Shaman must both ship mouseover healing packages.
-          grep -q 'MouseoverMacro("RUI FlashHeal"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI GreaterHeal"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI PrayerMend"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI HealingWave"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI LesserHeal"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI ChainHeal"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI EarthShield"' RetreatUI/Macros.lua
-          grep -q 'Earth Shock(Rank 1)' RetreatUI/Macros.lua
-          grep -q 'castsequence reset=8 Windfury Totem, Grace of Air Totem' RetreatUI/Macros.lua
-
-          # Paladin healing/utility mouseovers and supplied weapon/Hammer of Justice templates.
-          grep -q 'MouseoverMacro("RUI HolyLight"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI FlashLight"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI Cleanse"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI HoJ"' RetreatUI/Macros.lua
-          grep -q 'name-of-your-Shield' RetreatUI/Macros.lua
-
-          # Hunter supplied templates plus required timing warning.
-          grep -q 'Macro("RUI RaptorWeave"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI HunterBurst"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI PetCare"' RetreatUI/Macros.lua
-          grep -q 'castsequence reset=2.52 Steady Shot, !Auto Shot' RetreatUI/Macros.lua
-          grep -q 'timing is NOT universal' RetreatUI/Macros.lua
-          grep -q 'postImportWarning' RetreatUI/Macros.lua
-          grep -q '<food>' RetreatUI/Macros.lua
-
-          # Mage supplied CQS/AoE/burst package plus de-curse and Water Elemental controls.
-          grep -q 'Macro("RUI Counterspell"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI ABManaPot"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI ArcaneBurst"' RetreatUI/Macros.lua
-          grep -q 'MouseoverMacro("RUI Decurse"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI PetFreeze"' RetreatUI/Macros.lua
-
-          # Rogue, Warlock and Warrior high-value class macros.
-          grep -q 'Macro("RUI Sinister"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI Sap"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI Kick"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI Felhunter"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI SpellLock"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI Charge"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI Intervene"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI ShieldWall"' RetreatUI/Macros.lua
-          grep -q 'Macro("RUI Interrupt"' RetreatUI/Macros.lua
-
-          # ElvUI layout/class-color invariants.
-          grep -q 'ShiftAB = "BOTTOM,ElvUIParent,BOTTOM,-310,32"' RetreatUI/CoAElvUIProfile.lua
-          grep -q 'healthclass = true' RetreatUI/CoAElvUIProfile.lua
-          grep -q 'local function ApplyPlayerClassColor' RetreatUI/Profiles.lua
-          grep -q 'profile.general.valuecolor' RetreatUI/Profiles.lua
-          grep -q 'classColor = true' RetreatUI/Profiles.lua
-
-          # Plater Classic import flow and RetreatUI theming.
-          grep -q 'local function ImportPlaterClassic' RetreatUI/Profiles.lua
-          grep -q 'Plater.DecompressData' RetreatUI/Profiles.lua
-          grep -q 'Plater.db.SetProfile' RetreatUI/Profiles.lua
-          grep -q 'Plater.db.ResetProfile' RetreatUI/Profiles.lua
-          grep -q 'DetailsFramework.table.copy' RetreatUI/Profiles.lua
-          ! grep -q 'Plater.ImportProfile' RetreatUI/Profiles.lua
-          grep -q 'function Profiles:ApplyPlaterTheme()' RetreatUI/Profiles.lua
-
-          # Details persistence/theme invariants.
-          grep -q 'local function ForceDetailsWindowsOpen' RetreatUI/DetailsPersistenceFix.lua
-          grep -q 'function Profiles:PrepareDetailsForReload' RetreatUI/DetailsPersistenceFix.lua
-          grep -q 'forceOpenOnNextLogin = true' RetreatUI/DetailsPersistenceFix.lua
-          grep -q 'details.ImportProfile' RetreatUI/Profiles.lua
-          grep -q 'RETREAT_FONT = "Fira Sans Heavy"' RetreatUI/Profiles.lua
-          grep -q 'RETREAT_TEXTURE = "ElvUI Norm"' RetreatUI/Profiles.lua
-
-          # Eight-step installer remains unchanged.
-          grep -q 'local TOTAL_PAGES = 8' RetreatUI/Installer.lua
-          for page in welcome macros elvui plater weakauras details dbm reload; do
-            grep -q "id = \"$page\"" RetreatUI/Installer.lua
-          done
-          grep -q 'ImportPlater' RetreatUI/Installer.lua
-          grep -q 'InstallClassHUD' RetreatUI/Installer.lua
-          grep -q 'CurrentClassName' RetreatUI/Installer.lua
-
-      - name: Package
+      - name: Package addon
         shell: bash
-        env:
-          ASSET: ${{ steps.manifest.outputs.asset }}
         run: |
           set -euo pipefail
+          ASSET="RetreatUI_TBC_v${VERSION}.zip"
           rm -rf dist
           mkdir -p dist/package
           cp -a RetreatUI dist/package/RetreatUI
-          (cd dist/package && zip -r "../$ASSET" RetreatUI)
+          (cd dist/package && zip -qr "../$ASSET" RetreatUI)
           test -s "dist/$ASSET"
+          zipinfo -1 "dist/$ASSET" | grep -Fxq 'RetreatUI/RetreatUI.toc'
+          ! zipinfo -1 "dist/$ASSET" | grep -q '^tests/'
+          (cd dist && sha256sum "$ASSET" > "$ASSET.sha256")
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
 
-          for file in RetreatUI.toc WeakAuraData.lua ClassWeakAuraData.lua DruidComboPoints.lua RogueComboPoints.lua GeneralWeakAuraData.lua GeneralPlacementFix.lua GeneralWeakAuras.lua DetailsPersistenceFix.lua Macros.lua ProfilePayloadDetails.lua ProfilePayloadPlater4.lua; do
-            zipinfo -1 "dist/$ASSET" | grep -q "^RetreatUI/$file$"
-          done
-
-          ! zipinfo -1 "dist/$ASSET" | grep -q '^RetreatUI/DruidRuntime\.lua$'
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.manifest.outputs.asset }}
-          path: dist/${{ steps.manifest.outputs.asset }}
-          if-no-files-found: error
-
-      - name: Create or update prerelease
-        if: steps.manifest.outputs.publish == 'true' && github.event_name != 'pull_request'
+      - name: Publish prerelease
+        if: github.event_name != 'pull_request' && env.PUBLISH == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.manifest.outputs.tag }}
-          TITLE: ${{ steps.manifest.outputs.title }}
-          ASSET: ${{ steps.manifest.outputs.asset }}
         run: |
           set -euo pipefail
+          TAG="v${VERSION}"
           NOTES=$(cat <<'EOF'
-          RetreatUI TBC beta 13.
+          Class-native TBC HUD overhaul.
 
-          Includes:
-          - Adds Character Specific macro packages for all nine TBC classes.
-          - Incorporates the supplied Warrior, Paladin, Druid, Hunter and Mage macro templates.
-          - Adds Priest and Shaman mouseover healing/utility macro packages.
-          - Adds selected high-value TBC macros for Rogue and Warlock and supplements the other classes with useful class utilities.
-          - Hunter receives a post-import warning explaining that the `reset=2.52` Steady Shot template must be adjusted to the player's effective ranged attack speed; the Feed Pet food placeholder is also called out.
-          - Adds macro slot/name/body validation and refuses partial installs when there are not enough Character Specific Macro slots.
-          - Keeps General Macro slots untouched, preserves the Druid Macro Helper integration, all-class WeakAuras, exact HUD geometry, Plater, Details and ElvUI behavior.
-
-          This remains a testing prerelease.
+          - Rebuilt all 9 TBC class HUDs around dedicated Resources, Main, Utility, Systems and reminder layers.
+          - Druid and Rogue now use native WeakAuras combo-point power tracking.
+          - Added class mechanics including Shaman totems, Warlock Soul Shards, Druid mana-in-form, energy tick / five-second-rule timing, class reminders and Warrior stance-aware abilities.
+          - Existing General trinket/proc tracking remains shared.
+          - Macro installation is Character Specific; legacy RetreatUI macros in General are migrated safely while preserving their current body and icon.
           EOF
           )
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "dist/$ASSET" --clobber
-            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES" --prerelease
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "dist/$ASSET" "dist/$ASSET.sha256" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes "$NOTES" --prerelease
           else
-            gh release create "$TAG" "dist/$ASSET" --target "$GITHUB_SHA" --title "$TITLE" --notes "$NOTES" --prerelease
+            gh release create "$TAG" "dist/$ASSET" "dist/$ASSET.sha256" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes "$NOTES" --prerelease
           fi
