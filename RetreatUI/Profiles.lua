@@ -53,6 +53,7 @@ function Profiles:ApplyElvUI(resolution)
     E.data.global.general.WorldMapCoordinates.position = "BOTTOM"
   end
 
+  -- These private settings are part of the supplied profile setup contract.
   if E.private and E.private.general then
     E.private.general.chatBubbleFont = "Naowh"
     E.private.general.chatBubbleFontOutline = "OUTLINE"
@@ -116,7 +117,7 @@ function Profiles:ApplyPlater(resolution)
   if type(profile) ~= "string" or profile == "" then return false, "Plater profile payload is missing" end
 
   EnsurePlaterHooks()
-  local ok, err = pcall(PlaterAPI.ImportProfile, profile, PROFILE_NAME)
+  local ok, err = pcall(PlaterAPI.ImportProfile, PlaterAPI, profile, PROFILE_NAME)
   if not ok then return false, "Plater import failed: " .. tostring(err) end
 
   Record("plater", resolution or "1440p")
@@ -128,7 +129,7 @@ function Profiles:ApplyDetails()
   local profile = RUI.referenceProfiles and RUI.referenceProfiles.details
   if type(profile) ~= "string" or profile == "" then return false, "Details profile payload is missing" end
 
-  local ok, err = pcall(DetailsAPI.ImportProfile, profile, PROFILE_NAME)
+  local ok, err = pcall(DetailsAPI.ImportProfile, DetailsAPI, profile, PROFILE_NAME)
   if not ok then return false, "Details import failed: " .. tostring(err) end
 
   Record("details")
@@ -141,8 +142,7 @@ function Profiles:ApplyBigWigs(resolution)
   local profile = RUI.referenceProfiles and RUI.referenceProfiles[key]
   if type(profile) ~= "table" or type(profile[1]) ~= "string" then return false, "BigWigs profile payload is missing" end
 
-  local callbackFinished = false
-  local callbackSuccess = false
+  local callbackFinished, callbackSuccess = false, false
   local ok, err = pcall(BigWigsAPI.RegisterProfile, "RetreatUI", profile[1], PROFILE_NAME, function(success)
     callbackFinished = true
     callbackSuccess = success == true
