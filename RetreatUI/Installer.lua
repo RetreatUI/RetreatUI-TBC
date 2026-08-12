@@ -20,226 +20,116 @@ end
 local function Button(parent, text, width, callback)
   local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
   button:SetSize(width or 130, 30)
-  SetBackdrop(button, { 0.035, 0.045, 0.055, 0.98 }, { 0.58, 0.36, 0.08, 1 })
+  SetBackdrop(button, {0.035,0.045,0.055,0.98}, {0.58,0.36,0.08,1})
   button.label = Font(button, text, 11)
   button.label:SetPoint("CENTER")
   button:SetScript("OnClick", callback)
-  button:SetScript("OnEnter", function(self)
-    if self:IsEnabled() then self:SetBackdropBorderColor(0.95, 0.58, 0.12, 1) end
-  end)
-  button:SetScript("OnLeave", function(self)
-    if self:IsEnabled() then self:SetBackdropBorderColor(0.58, 0.36, 0.08, 1) end
-  end)
+  button:SetScript("OnEnter", function(self) if self:IsEnabled() then self:SetBackdropBorderColor(0.95,0.58,0.12,1) end end)
+  button:SetScript("OnLeave", function(self) if self:IsEnabled() then self:SetBackdropBorderColor(0.58,0.36,0.08,1) end end)
   return button
 end
 
 local function SetButtonEnabled(button, enabled)
   if enabled then
-    button:Enable()
-    button:SetAlpha(1)
-    button.label:SetTextColor(1, 1, 1)
+    button:Enable(); button:SetAlpha(1); button.label:SetTextColor(1,1,1)
   else
-    button:Disable()
-    button:SetAlpha(0.45)
-    button.label:SetTextColor(0.55, 0.58, 0.62)
+    button:Disable(); button:SetAlpha(0.45); button.label:SetTextColor(0.55,0.58,0.62)
   end
 end
 
-local function CurrentClassName()
-  local localized, class = UnitClass("player")
-  return localized or class or "Class"
+local function IsLoaded(name)
+  if type(RUI.IsAddonLoaded) == "function" and RUI:IsAddonLoaded(name) then return true end
+  if C_AddOns and type(C_AddOns.IsAddOnLoaded) == "function" then return C_AddOns.IsAddOnLoaded(name) end
+  if type(IsAddOnLoaded) == "function" then return IsAddOnLoaded(name) end
+  return false
 end
 
-local function ResolveText(value)
-  if type(value) == "function" then return value() end
-  return value or ""
+local function PlayerClass()
+  local localized, token = UnitClass("player")
+  return localized or token or "Class", token
 end
 
-local function PageResult(pageId, text, success)
+local function SetStatus(text, success)
   if not frame then return end
-  frame.pageResults = frame.pageResults or {}
-  frame.pageResults[pageId] = { text = text, success = success }
+  frame.status:SetText(text or "")
+  if success == true then frame.status:SetTextColor(0.35,0.9,0.45)
+  elseif success == false then frame.status:SetTextColor(0.95,0.35,0.2)
+  else frame.status:SetTextColor(0.68,0.73,0.79) end
 end
 
-local function MacroReady()
-  local module = RUI.modules.macros
-  if not module or type(module.IsReady) ~= "function" then
-    return false, "NO " .. string.upper(CurrentClassName()) .. " MACRO PACKAGE"
-  end
-  local ok, ready, message = pcall(module.IsReady, module)
-  if not ok then return false, tostring(ready) end
-  return ready == true, message or (ready and "READY" or "MACRO PACKAGE NOT READY")
+local function Profiles()
+  return RUI.modules and RUI.modules.profiles
 end
 
-local function ImportMacros()
-  local module = RUI.modules.macros
-  if not module or type(module.Import) ~= "function" then
-    return false, "No RetreatUI macro package exists for " .. CurrentClassName() .. "."
-  end
-  return module:Import()
+local function WeakAurasModule()
+  return RUI.modules and RUI.modules.weakauras
 end
 
 local function ElvUIReady()
-  if not RUI:IsAddonLoaded("ElvUI") then return false, "ELVUI NOT LOADED" end
-  local profiles = RUI.modules.profiles
-  if not profiles or type(profiles.ApplyElvUI) ~= "function" then return false, "ELVUI PROFILE MODULE MISSING" end
-  if type(RUI.ElvUIProfile) ~= "table" then return false, "ELVUI PROFILE NOT EMBEDDED" end
-  return true, "READY — CLASS COLOR: " .. string.upper(CurrentClassName())
+  local p = Profiles()
+  return IsLoaded("ElvUI") and p and type(p.ApplyElvUI) == "function"
+    and RUI.referenceProfiles and RUI.referenceProfiles.elvui and RUI.referenceProfiles.elvui1080p
 end
 
-local function ImportElvUI()
-  local profiles = RUI.modules.profiles
-  if not profiles or type(profiles.ApplyElvUI) ~= "function" then return false, "ElvUI profile module is missing." end
-  return profiles:ApplyElvUI()
-end
-
-local function PlaterReady()
-  if not RUI:IsAddonLoaded("Plater") and not _G.Plater then return false, "PLATER NOT LOADED" end
-  local profiles = RUI.modules.profiles
-  if not profiles or type(profiles.ApplyPlater) ~= "function" then return false, "PLATER PROFILE MODULE MISSING" end
-  if type(RUI.profilePayloads) ~= "table" or type(RUI.profilePayloads.plater) ~= "string" or RUI.profilePayloads.plater == "" then
-    return false, "PLATER PROFILE NOT EMBEDDED"
-  end
-  return true, "READY — UNIVERSAL RETREATUI PROFILE"
-end
-
-local function ImportPlater()
-  local profiles = RUI.modules.profiles
-  if not profiles or type(profiles.ApplyPlater) ~= "function" then return false, "Plater profile module is missing." end
-  return profiles:ApplyPlater()
-end
-
-local function WeakAurasReady()
-  if not RUI:IsAddonLoaded("WeakAuras") then return false, "WEAKAURAS NOT LOADED" end
-  local wa = RUI.modules.weakauras
-  if not wa or not wa.IsAvailable or not wa:IsAvailable() then return false, "WEAKAURAS API NOT READY" end
-  if not wa.IsClassSupported or not wa:IsClassSupported() then
-    return false, "NO " .. string.upper(CurrentClassName()) .. " WEAKAURAS PACKAGE"
-  end
-  return true, "READY — " .. string.upper(CurrentClassName()) .. " ONLY — INSTALL + VERIFY"
-end
-
-local function ImportWeakAuras()
-  local wa = RUI.modules.weakauras
-  if not wa or type(wa.InstallClassHUD) ~= "function" then return false, "WeakAuras class package module is missing." end
-  return wa:InstallClassHUD()
+local function BigWigsReady()
+  local p = Profiles()
+  return (IsLoaded("BigWigs") or _G.BigWigsAPI ~= nil) and p and type(p.ApplyBigWigs) == "function"
+    and RUI.referenceProfiles and RUI.referenceProfiles.bigwigs and RUI.referenceProfiles.bigwigs1080p
 end
 
 local function DetailsReady()
-  if not RUI:IsAddonLoaded("Details") and not _G.Details and not _G._detalhes then return false, "DETAILS NOT LOADED" end
-  local profiles = RUI.modules.profiles
-  if not profiles or type(profiles.ApplyDetails) ~= "function" then return false, "DETAILS PROFILE MODULE MISSING" end
-  if type(RUI.profilePayloads) ~= "table" or type(RUI.profilePayloads.details) ~= "string" or RUI.profilePayloads.details == "" then
-    return false, "DETAILS PROFILE NOT EMBEDDED"
-  end
-  return true, "READY — UNIVERSAL RETREATUI PROFILE"
+  local p = Profiles()
+  return (IsLoaded("Details") or _G.DetailsAPI ~= nil) and p and type(p.ApplyDetails) == "function"
+    and RUI.referenceProfiles and type(RUI.referenceProfiles.details) == "string"
 end
 
-local function ImportDetails()
-  local profiles = RUI.modules.profiles
-  if not profiles or type(profiles.ApplyDetails) ~= "function" then return false, "Details profile module is missing." end
-  return profiles:ApplyDetails()
+local function PlaterReady()
+  local p = Profiles()
+  return (IsLoaded("Plater") or _G.PlaterAPI ~= nil) and p and type(p.ApplyPlater) == "function"
+    and RUI.referenceProfiles and type(RUI.referenceProfiles.plater) == "string" and type(RUI.referenceProfiles.plater1080p) == "string"
 end
 
-local function DBMReady()
-  if not _G.DBM and not RUI:IsAddonLoaded("DBM-Core") then return false, "DBM NOT LOADED" end
-  local module = RUI.modules.dbm
-  if module and type(module.IsReady) == "function" then
-    local ok, ready, message = pcall(module.IsReady, module)
-    if ok and ready then return true, message or "READY" end
-    if ok then return false, message or "DBM PROFILE NOT READY" end
-  end
-  if module and type(module.Apply) == "function" then return true, "READY" end
-  return false, "DBM PROFILE NOT EMBEDDED YET"
+local function GeneralWAReady()
+  local wa = WeakAurasModule()
+  return IsLoaded("WeakAuras") and wa and type(wa.OpenGeneralImport) == "function" and wa:IsGeneralSupported()
 end
 
-local function ImportDBM()
-  local module = RUI.modules.dbm
-  if not module or type(module.Apply) ~= "function" then return false, "DBM profile is not embedded in this beta yet." end
-  return module:Apply()
+local function ClassWAReady()
+  local wa = WeakAurasModule()
+  return IsLoaded("WeakAuras") and wa and type(wa.OpenClassImport) == "function" and wa:IsClassSupported()
 end
 
 local PAGES = {
-  {
-    id = "welcome",
-    title = "WELCOME",
-    subtitle = "Welcome to RetreatUI for The Burning Crusade.",
-    description = "This installer guides you through each part of the setup one page at a time. Macros and WeakAuras are matched to the class you are currently playing; the shared ElvUI, Plater, Details and DBM setup is used across all classes.",
-  },
-  {
-    id = "macros",
-    title = function() return "IMPORT " .. string.upper(CurrentClassName()) .. " MACROS" end,
-    subtitle = function() return "Install only the RetreatUI macros for " .. CurrentClassName() .. "." end,
-    description = "RetreatUI creates only missing Character Specific Macros. Existing macros with the same RUI name are preserved exactly as the player edited them. General Macro slots are never touched.",
-    button = "INSTALL MISSING MACROS",
-    ready = MacroReady,
-    action = ImportMacros,
-  },
-  {
-    id = "elvui",
-    title = "IMPORT ELVUI",
-    subtitle = function() return "Install the RetreatUI layout with " .. CurrentClassName() .. " class colors." end,
-    description = "Creates and activates the RetreatUI ElvUI profile. UnitFrames and profile accents follow your current class color, while the stance/form bar stays at the bottom centered directly beneath the player frame.",
-    button = "IMPORT ELVUI",
-    ready = ElvUIReady,
-    action = ImportElvUI,
-  },
-  {
-    id = "plater",
-    title = "IMPORT PLATER",
-    subtitle = "Install the shared RetreatUI Plater profile.",
-    description = "Uses the same supplied Plater profile for every class, then normalizes typography and statusbar textures to Fira Sans Heavy and ElvUI Norm without changing the profile's tracking logic, scripts, colors or sizing.",
-    button = "IMPORT PLATER",
-    ready = PlaterReady,
-    action = ImportPlater,
-  },
-  {
-    id = "weakauras",
-    title = function() return "IMPORT " .. string.upper(CurrentClassName()) .. " WEAKAURAS" end,
-    subtitle = function() return "Install and verify only the RetreatUI WeakAuras package for " .. CurrentClassName() .. "." end,
-    description = "RetreatUI detects the current class and only installs its matching WeakAuras HUD. It never imports another class package into this character.",
-    button = "IMPORT WEAKAURAS",
-    ready = WeakAurasReady,
-    action = ImportWeakAuras,
-  },
-  {
-    id = "details",
-    title = "IMPORT DETAILS",
-    subtitle = "Install the shared RetreatUI Details profile.",
-    description = "Uses the same supplied Details profile for every class and keeps its window/segment setup, then applies the RetreatUI Fira Sans Heavy typography, ElvUI Norm bars, compact spacing and dark meter styling.",
-    button = "IMPORT DETAILS",
-    ready = DetailsReady,
-    action = ImportDetails,
-  },
-  {
-    id = "dbm",
-    title = "IMPORT DBM",
-    subtitle = "Install the RetreatUI DBM profile.",
-    description = "Applies the shared RetreatUI DBM profile when the DBM package is available and loaded.",
-    button = "IMPORT DBM",
-    ready = DBMReady,
-    action = ImportDBM,
-  },
-  {
-    id = "reload",
-    title = "RELOAD",
-    subtitle = "RetreatUI setup is ready to finish.",
-    description = "Reload the UI to apply all imported profiles and refresh WeakAuras. You can reopen this installer at any time with /ruitbc.",
-    button = "RELOAD UI",
-    reload = true,
-  },
+  { id="welcome", title="WELCOME TO RETREATUI", description="To start the installation process, click Continue." },
+  { id="elvui", title="ELVUI", description="Click the button representing your resolution to setup ElvUI.", two=true, ready=ElvUIReady,
+    action1=function() return Profiles():ApplyElvUI() end, label1="1440p",
+    action2=function() return Profiles():ApplyElvUI("1080p") end, label2="1080p" },
+  { id="bigwigs", title="BIGWIGS", description="Click the button representing your resolution to setup BigWigs.", two=true, ready=BigWigsReady,
+    action1=function() return Profiles():ApplyBigWigs() end, label1="1440p",
+    action2=function() return Profiles():ApplyBigWigs("1080p") end, label2="1080p" },
+  { id="details", title="DETAILS", description="Click the button below to setup Details.", ready=DetailsReady,
+    action1=function() return Profiles():ApplyDetails() end, label1="SETUP DETAILS" },
+  { id="plater", title="PLATER", description="Click the button representing your resolution to setup Plater.", two=true, ready=PlaterReady,
+    action1=function() return Profiles():ApplyPlater() end, label1="1440p",
+    action2=function() return Profiles():ApplyPlater("1080p") end, label2="1080p" },
+  { id="generalwa", title="GENERAL WEAKAURAS", description="Click the button below to import the General WeakAuras.", ready=GeneralWAReady,
+    action1=function()
+      if frame then frame:SetFrameStrata("HIGH") end
+      return WeakAurasModule():OpenGeneralImport()
+    end, label1="CORE" },
+  { id="classwa", title="CLASS WEAKAURA", description=function()
+      local localized = PlayerClass()
+      return "Click the button below to import your Class WeakAura.\n\nYour class: " .. tostring(localized)
+    end, ready=ClassWAReady,
+    action1=function()
+      if frame then frame:SetFrameStrata("HIGH") end
+      return WeakAurasModule():OpenClassImport()
+    end, label1="IMPORT CLASS WA" },
+  { id="complete", title="INSTALLATION COMPLETE", description="You have completed the installation process. Click Reload to save your settings and reload your UI.", reload=true, label1="RELOAD" },
 }
 
-local function SetStatus(text, success)
-  if not frame or not frame.status then return end
-  frame.status:SetText(text or "")
-  if success == true then
-    frame.status:SetTextColor(0.35, 0.9, 0.45)
-  elseif success == false then
-    frame.status:SetTextColor(0.95, 0.35, 0.2)
-  else
-    frame.status:SetTextColor(0.68, 0.73, 0.79)
-  end
+local function Resolve(value)
+  return type(value) == "function" and value() or (value or "")
 end
 
 local function RefreshPage()
@@ -249,42 +139,37 @@ local function RefreshPage()
   local page = PAGES[index]
 
   frame.progress:SetText(string.format("STEP %d OF %d", index, TOTAL_PAGES))
-  frame.pageTitle:SetText(ResolveText(page.title))
-  frame.pageSubtitle:SetText(ResolveText(page.subtitle))
-  frame.description:SetText(ResolveText(page.description))
+  frame.pageTitle:SetText(Resolve(page.title))
+  frame.description:SetText(Resolve(page.description))
 
   if index > 1 then frame.back:Show() else frame.back:Hide() end
   if index < TOTAL_PAGES then frame.next:Show() else frame.next:Hide() end
-  frame.next.label:SetText(index == 1 and "GET STARTED" or "NEXT")
+  frame.next.label:SetText(index == 1 and "CONTINUE" or "NEXT")
 
-  if page.button then
-    frame.action:Show()
-    frame.action.label:SetText(page.button)
-  else
-    frame.action:Hide()
+  frame.option1:Hide(); frame.option2:Hide()
+  local ready = page.ready and page.ready() or true
+
+  if page.action1 or page.reload then
+    frame.option1:Show()
+    frame.option1.label:SetText(page.label1 or "SETUP")
+    SetButtonEnabled(frame.option1, ready == true)
+  end
+  if page.two and page.action2 then
+    frame.option2:Show()
+    frame.option2.label:SetText(page.label2 or "1080p")
+    SetButtonEnabled(frame.option2, ready == true)
   end
 
-  local saved = frame.pageResults and frame.pageResults[page.id]
-  if saved then
-    SetStatus(saved.text, saved.success)
-    local ready = page.ready and select(1, page.ready()) or true
-    SetButtonEnabled(frame.action, ready == true)
-  elseif page.reload then
-    SetStatus("Ready to reload.", true)
-    SetButtonEnabled(frame.action, true)
-  elseif page.ready then
-    local ready, message = page.ready()
-    SetStatus(message or (ready and "READY" or "NOT AVAILABLE"), ready == true and true or false)
-    SetButtonEnabled(frame.action, ready == true)
-  else
-    SetStatus("Follow the steps to build your RetreatUI setup.", nil)
-  end
+  if page.ready and not ready then
+    SetStatus("Enable " .. page.title:gsub(" WEAKAURAS", "") .. " to unlock this step.", false)
+  elseif page.reload then SetStatus("Ready to reload.", true)
+  else SetStatus("READY", true) end
 end
 
-local function RunCurrentAction()
-  if not frame then return end
-  local page = PAGES[frame.currentPage or 1]
+local function RunAction(slot)
+  local page = PAGES[frame and frame.currentPage or 1]
   if not page then return end
+  if InCombatLockdown and InCombatLockdown() then SetStatus("Leave combat before importing this component.", false); return end
 
   if page.reload then
     local db = RUI:EnsureDB()
@@ -293,111 +178,59 @@ local function RunCurrentAction()
     return
   end
 
-  if not page.action then return end
-  if InCombatLockdown and InCombatLockdown() then
-    PageResult(page.id, "Leave combat before importing this component.", false)
-    RefreshPage()
-    return
-  end
+  if page.ready and not page.ready() then SetStatus("This step is not available.", false); return end
+  local action = slot == 2 and page.action2 or page.action1
+  if type(action) ~= "function" then return end
 
-  local ready, readyMessage = true, nil
-  if page.ready then ready, readyMessage = page.ready() end
-  if not ready then
-    PageResult(page.id, readyMessage or "This component is not available.", false)
-    RefreshPage()
-    return
-  end
-
-  local ok, success, message = pcall(page.action)
-  if not ok then
-    PageResult(page.id, tostring(success), false)
-  elseif success then
-    PageResult(page.id, message or "Imported successfully.", true)
-  else
-    PageResult(page.id, message or "Import failed.", false)
-  end
-  RefreshPage()
+  local ok, success, message = pcall(action)
+  if not ok then SetStatus(tostring(success), false)
+  elseif success then SetStatus(message or "Imported successfully.", true)
+  else SetStatus(message or "Import failed.", false) end
 end
 
 local function BuildInstaller()
   if frame then return frame end
-
   frame = CreateFrame("Frame", "RetreatUITBCInstaller", UIParent, "BackdropTemplate")
   frame:SetSize(760, 470)
   frame:SetPoint("CENTER")
   frame:SetFrameStrata("DIALOG")
-  frame:SetMovable(true)
-  frame:EnableMouse(true)
-  frame:RegisterForDrag("LeftButton")
+  frame:SetMovable(true); frame:EnableMouse(true); frame:RegisterForDrag("LeftButton")
   frame:SetScript("OnDragStart", frame.StartMoving)
   frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-  SetBackdrop(frame, { 0.018, 0.025, 0.032, 0.985 }, { 0.55, 0.34, 0.08, 1 })
+  SetBackdrop(frame, {0.018,0.025,0.032,0.985}, {0.55,0.34,0.08,1})
 
   frame.brand = Font(frame, "RETREATUI — THE BURNING CRUSADE", 18)
-  frame.brand:SetPoint("TOPLEFT", 28, -26)
-  frame.brand:SetTextColor(0.95, 0.58, 0.12)
-
+  frame.brand:SetPoint("TOPLEFT", 28, -26); frame.brand:SetTextColor(0.95,0.58,0.12)
   frame.progress = Font(frame, "STEP 1 OF 8", 10)
-  frame.progress:SetPoint("TOPRIGHT", -52, -30)
-  frame.progress:SetTextColor(0.58, 0.62, 0.68)
+  frame.progress:SetPoint("TOPRIGHT", -52, -30); frame.progress:SetTextColor(0.58,0.62,0.68)
 
   local divider = frame:CreateTexture(nil, "ARTWORK")
-  divider:SetColorTexture(0.16, 0.18, 0.21, 1)
-  divider:SetPoint("TOPLEFT", 28, -62)
-  divider:SetPoint("TOPRIGHT", -28, -62)
-  divider:SetHeight(1)
+  divider:SetColorTexture(0.16,0.18,0.21,1); divider:SetPoint("TOPLEFT",28,-62); divider:SetPoint("TOPRIGHT",-28,-62); divider:SetHeight(1)
 
   frame.pageTitle = Font(frame, "", 24)
-  frame.pageTitle:SetPoint("TOPLEFT", 42, -105)
-  frame.pageTitle:SetTextColor(1, 1, 1)
-
-  frame.pageSubtitle = Font(frame, "", 12)
-  frame.pageSubtitle:SetPoint("TOPLEFT", frame.pageTitle, "BOTTOMLEFT", 0, -12)
-  frame.pageSubtitle:SetTextColor(0.95, 0.58, 0.12)
-
+  frame.pageTitle:SetPoint("TOPLEFT", 42, -105); frame.pageTitle:SetTextColor(1,1,1)
   frame.description = Font(frame, "", 11)
-  frame.description:SetPoint("TOPLEFT", frame.pageSubtitle, "BOTTOMLEFT", 0, -24)
-  frame.description:SetWidth(660)
-  frame.description:SetJustifyH("LEFT")
-  frame.description:SetJustifyV("TOP")
-  frame.description:SetWordWrap(true)
-  frame.description:SetTextColor(0.72, 0.76, 0.82)
+  frame.description:SetPoint("TOPLEFT", 42, -160); frame.description:SetWidth(660)
+  frame.description:SetJustifyH("LEFT"); frame.description:SetJustifyV("TOP"); frame.description:SetWordWrap(true)
+  frame.description:SetTextColor(0.72,0.76,0.82)
 
   local statusPanel = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-  statusPanel:SetSize(660, 62)
-  statusPanel:SetPoint("CENTER", 0, -28)
-  SetBackdrop(statusPanel, { 0.025, 0.033, 0.041, 0.94 }, { 0.12, 0.15, 0.18, 1 })
+  statusPanel:SetSize(660,62); statusPanel:SetPoint("CENTER",0,-28)
+  SetBackdrop(statusPanel,{0.025,0.033,0.041,0.94},{0.12,0.15,0.18,1})
+  local statusLabel = Font(statusPanel,"STATUS",9); statusLabel:SetPoint("TOPLEFT",14,-11); statusLabel:SetTextColor(0.48,0.52,0.58)
+  frame.status = Font(statusPanel,"",10); frame.status:SetPoint("TOPLEFT",statusLabel,"BOTTOMLEFT",0,-8); frame.status:SetPoint("RIGHT",statusPanel,"RIGHT",-14,0); frame.status:SetJustifyH("LEFT")
 
-  local statusLabel = Font(statusPanel, "STATUS", 9)
-  statusLabel:SetPoint("TOPLEFT", 14, -11)
-  statusLabel:SetTextColor(0.48, 0.52, 0.58)
+  frame.option1 = Button(frame,"SETUP",150,function() RunAction(1) end)
+  frame.option2 = Button(frame,"1080p",150,function() RunAction(2) end)
+  frame.option1:SetPoint("CENTER",-82,-108); frame.option2:SetPoint("CENTER",82,-108)
 
-  frame.status = Font(statusPanel, "", 10)
-  frame.status:SetPoint("TOPLEFT", statusLabel, "BOTTOMLEFT", 0, -8)
-  frame.status:SetPoint("RIGHT", statusPanel, "RIGHT", -14, 0)
-  frame.status:SetJustifyH("LEFT")
-  frame.status:SetWordWrap(true)
+  frame.back = Button(frame,"BACK",100,function() frame.currentPage=math.max(1,(frame.currentPage or 1)-1); RefreshPage() end)
+  frame.back:SetPoint("BOTTOMLEFT",28,22)
+  frame.next = Button(frame,"NEXT",120,function() frame.currentPage=math.min(TOTAL_PAGES,(frame.currentPage or 1)+1); RefreshPage() end)
+  frame.next:SetPoint("BOTTOMRIGHT",-28,22)
+  frame.close = Button(frame,"X",32,function() frame:Hide() end); frame.close:SetPoint("TOPRIGHT",-10,-10)
 
-  frame.action = Button(frame, "IMPORT", 190, RunCurrentAction)
-  frame.action:SetPoint("CENTER", 0, -108)
-
-  frame.back = Button(frame, "BACK", 100, function()
-    frame.currentPage = math.max(1, (frame.currentPage or 1) - 1)
-    RefreshPage()
-  end)
-  frame.back:SetPoint("BOTTOMLEFT", 28, 22)
-
-  frame.next = Button(frame, "NEXT", 120, function()
-    frame.currentPage = math.min(TOTAL_PAGES, (frame.currentPage or 1) + 1)
-    RefreshPage()
-  end)
-  frame.next:SetPoint("BOTTOMRIGHT", -28, 22)
-
-  frame.close = Button(frame, "X", 32, function() frame:Hide() end)
-  frame.close:SetPoint("TOPRIGHT", -10, -10)
-
-  frame.currentPage = 1
-  frame.pageResults = {}
+  frame.currentPage=1
   RefreshPage()
   return frame
 end
@@ -405,7 +238,7 @@ end
 function RUI:OpenInstaller()
   local installer = BuildInstaller()
   installer.currentPage = 1
-  installer.pageResults = installer.pageResults or {}
+  installer:SetFrameStrata("DIALOG")
   RefreshPage()
   installer:Show()
 end
