@@ -1,22 +1,21 @@
 ## Interface: 20506
 ## Title: RetreatUI
-## Notes: RetreatUI installer, profiles and class-native WeakAuras/macros for The Burning Crusade Classic Anniversary.
+## Notes: RetreatUI installer and profiles for The Burning Crusade Classic Anniversary.
 ## Author: Retreat
 ## Version: 0.1.0-beta.17
 ## SavedVariables: RetreatUITBCDB
-## OptionalDeps: ElvUI, Plater, Details, WeakAuras, DBM-Core, DruidMacroHelper
+## OptionalDeps: ElvUI, BigWigs, Plater, Details, WeakAuras, DruidMacroHelper
 ## DefaultState: Enabled
 
 Core.lua
 CoAElvUIProfile.lua
+ProfilePayloadBigWigs.lua
 ProfilePayloadPlater1.lua
 ProfilePayloadPlater2.lua
 ProfilePayloadPlater3.lua
 ProfilePayloadPlater4.lua
 ProfilePayloadDetails.lua
 Profiles.lua
-DetailsPersistenceFix.lua
-DetailsSimpleImport.lua
 TBCClassData.lua
 TBCClassHUD.lua
 TBCClassMechanics.lua
@@ -29,4 +28,3 @@ GeneralWeakAuras.lua
 Macros.lua
 MacroScopeFix.lua
 Installer.lua
-InstallerClassNativeText.lua
