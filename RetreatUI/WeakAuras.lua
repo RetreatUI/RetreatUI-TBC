@@ -6,8 +6,20 @@ RUI:RegisterModule("weakauras", WeakAurasModule)
 
 local function Available()
   return WeakAuras
-    and type(WeakAuras.Add) == "function"
+    and type(WeakAuras.Import) == "function"
     and type(WeakAuras.GetData) == "function"
+end
+
+local function DeepCopy(value, seen)
+  if type(value) ~= "table" then return value end
+  seen = seen or {}
+  if seen[value] then return seen[value] end
+  local copy = {}
+  seen[value] = copy
+  for key, child in pairs(value) do
+    copy[DeepCopy(key, seen)] = DeepCopy(child, seen)
+  end
+  return copy
 end
 
 local function CurrentPackage()
@@ -17,18 +29,33 @@ local function CurrentPackage()
   return class, package
 end
 
-local function PreserveUID(data)
-  local existing = WeakAuras.GetData(data.id)
-  if existing and existing.uid then data.uid = existing.uid end
-  return data
-end
+local function BuildWrapper(class, packageData)
+  local firstRoot = packageData.roots and packageData.roots[1]
+  if type(firstRoot) ~= "table" then return nil, "Class WeakAuras package has no root groups" end
 
-local function AddDisplay(data)
-  local ok, err = pcall(WeakAuras.Add, PreserveUID(data))
-  if not ok then return false, tostring(err) end
-  local installed = WeakAuras.GetData(data.id)
-  if not installed then return false, data.id .. " was not present after WeakAuras.Add" end
-  return true
+  local wrapper = DeepCopy(firstRoot)
+  wrapper.id = "RetreatUI TBC — " .. tostring(class)
+  wrapper.parent = nil
+  wrapper.regionType = "group"
+  wrapper.controlledChildren = {}
+  wrapper.anchorFrameType = "SCREEN"
+  wrapper.anchorPoint = "CENTER"
+  wrapper.selfPoint = "CENTER"
+  wrapper.xOffset = 0
+  wrapper.yOffset = 0
+
+  local children = {}
+  for _, root in ipairs(packageData.roots or {}) do
+    local child = DeepCopy(root)
+    child.parent = wrapper.id
+    wrapper.controlledChildren[#wrapper.controlledChildren + 1] = child.id
+    children[#children + 1] = child
+  end
+  for _, display in ipairs(packageData.displays or {}) do
+    children[#children + 1] = DeepCopy(display)
+  end
+
+  return { m = "d", d = wrapper, c = children, v = 2000 }
 end
 
 function WeakAurasModule:IsAvailable()
@@ -53,8 +80,34 @@ function WeakAurasModule:GetStatus()
   }
 end
 
-function WeakAurasModule:VerifyClassHUD(packageData)
+function WeakAurasModule:BuildClassImport()
+  local class, package = CurrentPackage()
+  if not package or type(package.Build) ~= "function" then
+    return nil, "No RetreatUI WeakAuras package exists for " .. tostring(class or "this class") .. "."
+  end
+
+  local packageData = package:Build()
+  if type(packageData) ~= "table" or type(packageData.roots) ~= "table" or type(packageData.displays) ~= "table" then
+    return nil, tostring(class or "Class") .. " WeakAuras package returned invalid data"
+  end
+
+  return BuildWrapper(class, packageData)
+end
+
+function WeakAurasModule:OpenClassImport()
   if not Available() then return false, "WeakAuras is not loaded" end
+  local class = RUI:GetPlayerClass()
+  local bundle, message = self:BuildClassImport()
+  if not bundle then return false, message end
+
+  local ok, result, importError = pcall(WeakAuras.Import, bundle)
+  if not ok then return false, "WeakAuras import error: " .. tostring(result) end
+  if result == false then return false, tostring(importError or "WeakAuras rejected the import") end
+  return true, tostring(class or "Class") .. " WeakAuras import window opened"
+end
+
+function WeakAurasModule:VerifyClassHUD(packageData)
+  if not WeakAuras or type(WeakAuras.GetData) ~= "function" then return false, "WeakAuras is not loaded" end
   local class, package = CurrentPackage()
   if not package then return false, "No WeakAuras package is available for " .. tostring(class or "this class") end
 
@@ -64,15 +117,13 @@ function WeakAurasModule:VerifyClassHUD(packageData)
   end
 
   for rootId, geometry in pairs(packageData.expected) do
-    local data = WeakAuras.GetData(rootId)
-    if not data then return false, rootId .. " is missing" end
-    if data.regionType ~= "dynamicgroup" then return false, rootId .. " is not a dynamic group" end
-    if data.anchorFrameType ~= "SCREEN" or data.anchorPoint ~= "CENTER" or data.selfPoint ~= "CENTER" then
-      return false, rootId .. " is not anchored to screen center"
-    end
-    if math.abs((tonumber(data.xOffset) or 0) - geometry.x) > 0.01
-      or math.abs((tonumber(data.yOffset) or 0) - geometry.y) > 0.01 then
-      return false, rootId .. " has the wrong HUD position"
+    if type(geometry) == "table" and geometry.x ~= nil and geometry.y ~= nil then
+      local data = WeakAuras.GetData(rootId)
+      if not data then return false, rootId .. " is missing" end
+      if math.abs((tonumber(data.xOffset) or 0) - geometry.x) > 0.01
+        or math.abs((tonumber(data.yOffset) or 0) - geometry.y) > 0.01 then
+        return false, rootId .. " has the wrong HUD position"
+      end
     end
   end
 
@@ -85,58 +136,19 @@ function WeakAurasModule:VerifyClassHUD(packageData)
   return true, tostring(class or "Class") .. " HUD verified"
 end
 
+-- Compatibility aliases now open WeakAuras' native import/update UI instead of
+-- writing displays directly into WeakAuras' database.
 function WeakAurasModule:InstallClassHUD()
-  if not Available() then return false, "WeakAuras is not loaded" end
-  local class, package = CurrentPackage()
-  if not package or type(package.Build) ~= "function" then
-    return false, "No RetreatUI WeakAuras package exists for " .. tostring(class or "this class") .. "."
-  end
-
-  local packageData = package:Build()
-  if not packageData or type(packageData.roots) ~= "table" or type(packageData.displays) ~= "table" then
-    return false, tostring(class or "Class") .. " WeakAuras package returned invalid data"
-  end
-
-  -- Seed parents first, then children, then restore final child ordering.
-  for _, root in ipairs(packageData.roots) do
-    local seed = {}
-    for key, value in pairs(root) do seed[key] = value end
-    seed.controlledChildren = {}
-    local ok, err = AddDisplay(seed)
-    if not ok then return false, err end
-  end
-
-  for _, data in ipairs(packageData.displays) do
-    local ok, err = AddDisplay(data)
-    if not ok then return false, err end
-  end
-
-  for _, root in ipairs(packageData.roots) do
-    local ok, err = AddDisplay(root)
-    if not ok then return false, err end
-  end
-
-  if type(WeakAuras.ScanForLoads) == "function" then pcall(WeakAuras.ScanForLoads) end
-
-  local verified, message = self:VerifyClassHUD(packageData)
-  if not verified then return false, message end
-
-  local db = RUI:EnsureDB()
-  db.integrations = db.integrations or {}
-  db.integrations.weakauras = db.integrations.weakauras or {}
-  db.integrations.weakauras[class] = { installed = true, version = RUI.version }
-
-  return true, tostring(class) .. " WeakAuras installed and verified"
+  return self:OpenClassImport()
 end
 
--- Compatibility aliases for beta.4/beta.5 callers.
 function WeakAurasModule:VerifyDruidHUD(packageData)
   return self:VerifyClassHUD(packageData)
 end
 
 function WeakAurasModule:InstallDruidHUD()
   if RUI:GetPlayerClass() ~= "DRUID" then return false, "Druid package is only available to Druids" end
-  return self:InstallClassHUD()
+  return self:OpenClassImport()
 end
 
 function WeakAurasModule:InstallSelected()
@@ -144,7 +156,7 @@ function WeakAurasModule:InstallSelected()
   local results = {}
   if db.selected.classWA and self:IsClassSupported() then
     local class = RUI:GetPlayerClass() or "class"
-    results[class:lower() .. "HUD"] = { self:InstallClassHUD() }
+    results[class:lower() .. "HUD"] = { self:OpenClassImport() }
   end
   return results
 end
