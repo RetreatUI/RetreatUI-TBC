@@ -6,6 +6,10 @@ RUI:RegisterModule("profiles", Profiles)
 
 local PROFILE_NAME = "RetreatUI"
 
+local function Resolution(resolution)
+  return resolution == "1080p" and "1080p" or "1440p"
+end
+
 local function Record(key, resolution)
   local db = RUI:EnsureDB()
   db.integrations = db.integrations or {}
@@ -17,18 +21,14 @@ local function Record(key, resolution)
   }
 end
 
-local function ProfileKey(base, resolution)
-  return base .. ((resolution == "1080p") and "1080p" or "")
-end
-
 function Profiles:ApplyElvUI(resolution)
   if not ElvUI or type(unpack) ~= "function" then return false, "ElvUI is not loaded" end
   local E = unpack(ElvUI)
   if not E or type(E.GetModule) ~= "function" then return false, "ElvUI API is unavailable" end
 
-  local key = ProfileKey("elvui", resolution)
-  local profile = RUI.referenceProfiles and RUI.referenceProfiles[key]
-  if type(profile) ~= "table" or type(profile[1]) ~= "string" then
+  local res = Resolution(resolution)
+  local profile = RUI.profilePayloads and RUI.profilePayloads.elvui and RUI.profilePayloads.elvui[res]
+  if type(profile) ~= "table" or type(profile.export) ~= "string" or profile.export == "" then
     return false, "ElvUI profile payload is missing"
   end
 
@@ -37,23 +37,19 @@ function Profiles:ApplyElvUI(resolution)
     return false, "ElvUI Distributor API is unavailable"
   end
 
-  local ok, profileType, _, data = pcall(DI.Decode, DI, profile[1])
-  if not ok or not profileType or type(data) ~= "table" then
-    return false, "ElvUI rejected the profile payload"
-  end
-
+  local ok, profileType, _, data = pcall(DI.Decode, DI, profile.export)
+  if not ok or not profileType or type(data) ~= "table" then return false, "ElvUI rejected the profile payload" end
   local imported, err = pcall(DI.SetImportedProfile, DI, profileType, PROFILE_NAME, data, true)
   if not imported then return false, "ElvUI import failed: " .. tostring(err) end
 
   if type(E.SetupCVars) == "function" then pcall(E.SetupCVars, E, true) end
   if E.data and E.data.global and E.data.global.general then
     E.data.global.general.mapAlphaWhenMoving = 0.4
-    E.data.global.general.UIScale = profile[2]
+    E.data.global.general.UIScale = profile.scale
     E.data.global.general.WorldMapCoordinates = E.data.global.general.WorldMapCoordinates or {}
     E.data.global.general.WorldMapCoordinates.position = "BOTTOM"
   end
 
-  -- These private settings are part of the supplied profile setup contract.
   if E.private and E.private.general then
     E.private.general.chatBubbleFont = "Naowh"
     E.private.general.chatBubbleFontOutline = "OUTLINE"
@@ -68,7 +64,7 @@ function Profiles:ApplyElvUI(resolution)
   end
   if E.private and E.private.nameplates then E.private.nameplates.enable = false end
 
-  Record("elvui", resolution or "1440p")
+  Record("elvui", res)
   return true, "ElvUI profile imported"
 end
 
@@ -109,24 +105,23 @@ local function EnsurePlaterHooks()
 end
 
 function Profiles:ApplyPlater(resolution)
-  if not Plater or not PlaterAPI or type(PlaterAPI.ImportProfile) ~= "function" then
-    return false, "Plater is not loaded"
-  end
-  local key = ProfileKey("plater", resolution)
-  local profile = RUI.referenceProfiles and RUI.referenceProfiles[key]
-  if type(profile) ~= "string" or profile == "" then return false, "Plater profile payload is missing" end
+  if not Plater or not PlaterAPI or type(PlaterAPI.ImportProfile) ~= "function" then return false, "Plater is not loaded" end
+  local res = Resolution(resolution)
+  local payloads = RUI.profilePayloads or {}
+  local profile = res == "1080p" and payloads.plater1080p or payloads.plater
+  if type(profile) ~= "string" or profile == "" then return false, "Plater " .. res .. " profile payload is missing" end
 
   EnsurePlaterHooks()
   local ok, err = pcall(PlaterAPI.ImportProfile, PlaterAPI, profile, PROFILE_NAME)
   if not ok then return false, "Plater import failed: " .. tostring(err) end
 
-  Record("plater", resolution or "1440p")
+  Record("plater", res)
   return true, "Plater profile imported"
 end
 
 function Profiles:ApplyDetails()
   if not DetailsAPI or type(DetailsAPI.ImportProfile) ~= "function" then return false, "Details is not loaded" end
-  local profile = RUI.referenceProfiles and RUI.referenceProfiles.details
+  local profile = RUI.profilePayloads and RUI.profilePayloads.details
   if type(profile) ~= "string" or profile == "" then return false, "Details profile payload is missing" end
 
   local ok, err = pcall(DetailsAPI.ImportProfile, DetailsAPI, profile, PROFILE_NAME)
@@ -138,15 +133,15 @@ end
 
 function Profiles:ApplyBigWigs(resolution)
   if not BigWigsAPI or type(BigWigsAPI.RegisterProfile) ~= "function" then return false, "BigWigs is not loaded" end
-  local key = ProfileKey("bigwigs", resolution)
-  local profile = RUI.referenceProfiles and RUI.referenceProfiles[key]
-  if type(profile) ~= "table" or type(profile[1]) ~= "string" then return false, "BigWigs profile payload is missing" end
+  local res = Resolution(resolution)
+  local profile = RUI.profilePayloads and RUI.profilePayloads.bigwigs and RUI.profilePayloads.bigwigs[res]
+  if type(profile) ~= "string" or profile == "" then return false, "BigWigs profile payload is missing" end
 
   local callbackFinished, callbackSuccess = false, false
-  local ok, err = pcall(BigWigsAPI.RegisterProfile, "RetreatUI", profile[1], PROFILE_NAME, function(success)
+  local ok, err = pcall(BigWigsAPI.RegisterProfile, "RetreatUI", profile, PROFILE_NAME, function(success)
     callbackFinished = true
     callbackSuccess = success == true
-    if callbackSuccess then Record("bigwigs", resolution or "1440p") end
+    if callbackSuccess then Record("bigwigs", res) end
   end)
   if not ok then return false, "BigWigs import failed: " .. tostring(err) end
   if callbackFinished and not callbackSuccess then return false, "BigWigs rejected the profile" end
