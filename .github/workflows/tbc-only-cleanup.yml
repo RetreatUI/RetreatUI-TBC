@@ -1,0 +1,87 @@
+name: One-time TBC-only repository cleanup
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  cleanup:
+    if: startsWith(github.event.issue.title, '[TBC-CLEANUP]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Normalize repository to TBC-only naming
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          old_profile = Path('RetreatUI/CoAElvUIProfile.lua')
+          new_profile = Path('RetreatUI/ElvUIProfile.lua')
+          if old_profile.exists():
+              old_profile.rename(new_profile)
+
+          textual = {'.lua', '.md', '.yml', '.yaml', '.toc', '.json', '.txt', '.cs', '.xaml'}
+          for path in root.rglob('*'):
+              if not path.is_file() or '.git' in path.parts or path == Path('.github/workflows/tbc-only-cleanup.yml'):
+                  continue
+              if path.suffix.lower() not in textual:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              updated = text.replace('CoAElvUIProfile.lua', 'ElvUIProfile.lua')
+              updated = updated.replace('COA_', 'TBC_')
+              updated = updated.replace('CoA', 'TBC')
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8')
+
+          Path('README.md').write_text('''# RetreatUI TBC\n\nRetreatUI is a UI package built exclusively for **World of Warcraft: The Burning Crusade Classic / Anniversary**.\n\n## Status\n\n**Work in progress / beta.** The project is being developed specifically around TBC gameplay, class utility and raid requirements.\n\nCurrent components include:\n\n- RetreatUI installer\n- ElvUI profile and TBC-specific layout\n- Class WeakAuras HUD packages\n- General WeakAuras utilities\n- Class macro packages\n- Details integration\n- Optional Plater integration when a compatible embedded profile is available\n\n## HUD layout\n\nThe shared center HUD uses:\n\n- Resource bar: X 0 / Y -152, 360 × 16\n- Main ability row: X 0 / Y -183, 38 px icons\n- Utility row: X 0 / Y -224, 32 px icons\n- Ability spacing: 1 px\n\n## Installation\n\nUse the RetreatUI Launcher for TBC, or install the `RetreatUI` folder manually into the TBC Anniversary `Interface/AddOns` directory.\n\nWeakAuras must be enabled before installing class HUD packages through `/ruitbc`.\n\n## Standalone WeakAuras\n\nStandalone TBC utility WeakAuras are released separately and are **not bundled into RetreatUI**. This keeps the full UI package and individual WeakAuras independent.\n\n## Author\n\nRetreat\n''', encoding='utf-8')
+          PY
+
+      - name: Remove one-time cleanup workflow before commit
+        run: git rm .github/workflows/tbc-only-cleanup.yml
+
+      - name: Validate Lua and TBC-only repository
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.1
+          find RetreatUI -type f -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+          test -s RetreatUI/ElvUIProfile.lua
+          grep -q '^ElvUIProfile.lua$' RetreatUI/RetreatUI.toc
+          ! test -e RetreatUI/CoAElvUIProfile.lua
+          ! git grep -n -E 'CoA|COA_|Conquest of Azeroth|Project Ascension' -- ':!README.md' ':!.github/workflows/tbc-only-cleanup.yml'
+          grep -q 'TBC_RESOURCE_X, TBC_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
+          grep -q 'TBC_MAIN_X, TBC_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
+          grep -q 'TBC_UTILITY_X, TBC_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
+
+      - name: Commit cleanup
+        run: |
+          set -euo pipefail
+          git config user.name "RetreatUI TBC"
+          git config user.email "retreatui@users.noreply.github.com"
+          git add -A
+          git commit -m "Make RetreatUI repository TBC-only"
+          git push origin HEAD:main
+
+      - name: Close request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "✅ RetreatUI-TBC active branch is now TBC-only. Profile naming, layout constants, documentation and validation references were normalized and Lua syntax validation passed."
+          gh issue close "$ISSUE_NUMBER" --reason completed
