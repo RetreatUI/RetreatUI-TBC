@@ -20,6 +20,7 @@ DetailsSimpleImport.lua
 WeakAuraData.lua
 ClassWeakAuraData.lua
 DruidComboPoints.lua
+DruidUtility.lua
 RogueComboPoints.lua
 GeneralWeakAuraData.lua
 GeneralPlacementFix.lua
