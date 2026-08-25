@@ -4,6 +4,20 @@ if not RUI then return end
 local WeakAurasModule = {}
 RUI:RegisterModule("weakauras", WeakAurasModule)
 
+local RETIRED_DRUID_UTILITY_IDS = {
+  "RetreatUI TBC — Druid Utility — Barkskin",
+  "RetreatUI TBC — Druid Utility — Dash",
+  "RetreatUI TBC — Druid Utility — Feral Charge",
+  "RetreatUI TBC — Druid Utility — Innervate",
+  "RetreatUI TBC — Druid Utility — Rebirth",
+  "RetreatUI TBC — Druid Utility — Tranquility",
+}
+
+local RETIRED_DRUID_UTILITY_SET = {}
+for _, id in ipairs(RETIRED_DRUID_UTILITY_IDS) do
+  RETIRED_DRUID_UTILITY_SET[id] = true
+end
+
 local function Available()
   return WeakAuras
     and type(WeakAuras.Add) == "function"
@@ -15,6 +29,48 @@ local function CurrentPackage()
   local key = class and class:lower()
   local package = key and RUI.weakAuraPackages and RUI.weakAuraPackages[key] or nil
   return class, package
+end
+
+local function PreparePackageData(class, packageData)
+  if class ~= "DRUID" or type(packageData) ~= "table" then
+    return packageData
+  end
+
+  -- Druid dispels now live directly on party/raid frames. Keep the center
+  -- Utility root available for future encounter-special modules, but retire
+  -- the old generic cooldown row so it does not create screen clutter.
+  if type(packageData.displays) == "table" then
+    for index = #packageData.displays, 1, -1 do
+      local data = packageData.displays[index]
+      if data and RETIRED_DRUID_UTILITY_SET[data.id] then
+        table.remove(packageData.displays, index)
+      end
+    end
+  end
+
+  for _, root in ipairs(packageData.roots or {}) do
+    if type(root.controlledChildren) == "table" then
+      for index = #root.controlledChildren, 1, -1 do
+        if RETIRED_DRUID_UTILITY_SET[root.controlledChildren[index]] then
+          table.remove(root.controlledChildren, index)
+        end
+      end
+    end
+  end
+
+  return packageData
+end
+
+local function DeleteRetiredClassAuras(class)
+  if class ~= "DRUID" or not WeakAuras or type(WeakAuras.Delete) ~= "function" then
+    return
+  end
+
+  for _, id in ipairs(RETIRED_DRUID_UTILITY_IDS) do
+    if WeakAuras.GetData(id) then
+      pcall(WeakAuras.Delete, id)
+    end
+  end
 end
 
 local function PreserveUID(data)
@@ -58,7 +114,7 @@ function WeakAurasModule:VerifyClassHUD(packageData)
   local class, package = CurrentPackage()
   if not package then return false, "No WeakAuras package is available for " .. tostring(class or "this class") end
 
-  packageData = packageData or package:Build()
+  packageData = PreparePackageData(class, packageData or package:Build())
   if type(packageData) ~= "table" or type(packageData.expected) ~= "table" then
     return false, tostring(class or "Class") .. " WeakAuras package returned invalid data"
   end
@@ -92,10 +148,12 @@ function WeakAurasModule:InstallClassHUD()
     return false, "No RetreatUI WeakAuras package exists for " .. tostring(class or "this class") .. "."
   end
 
-  local packageData = package:Build()
+  local packageData = PreparePackageData(class, package:Build())
   if not packageData or type(packageData.roots) ~= "table" or type(packageData.displays) ~= "table" then
     return false, tostring(class or "Class") .. " WeakAuras package returned invalid data"
   end
+
+  DeleteRetiredClassAuras(class)
 
   -- Seed parents first, then children, then restore final child ordering.
   for _, root in ipairs(packageData.roots) do
