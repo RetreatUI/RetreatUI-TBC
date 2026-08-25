@@ -6,6 +6,7 @@ on:
     paths:
       - "RetreatUI/ClassWeakAuraData.lua"
       - "RetreatUI/DruidComboPoints.lua"
+      - "RetreatUI/DruidUtility.lua"
       - "RetreatUI/RogueComboPoints.lua"
       - "RetreatUI/WeakAuraData.lua"
       - "RetreatUI/WeakAuras.lua"
@@ -16,6 +17,7 @@ on:
     paths:
       - "RetreatUI/ClassWeakAuraData.lua"
       - "RetreatUI/DruidComboPoints.lua"
+      - "RetreatUI/DruidUtility.lua"
       - "RetreatUI/RogueComboPoints.lua"
       - "RetreatUI/WeakAuraData.lua"
       - "RetreatUI/WeakAuras.lua"
@@ -40,11 +42,13 @@ jobs:
           luac5.1 -p RetreatUI/WeakAuraData.lua
           luac5.1 -p RetreatUI/ClassWeakAuraData.lua
           luac5.1 -p RetreatUI/DruidComboPoints.lua
+          luac5.1 -p RetreatUI/DruidUtility.lua
           luac5.1 -p RetreatUI/RogueComboPoints.lua
           luac5.1 -p RetreatUI/WeakAuras.lua
 
           grep -q '^ClassWeakAuraData.lua$' RetreatUI/RetreatUI.toc
           grep -q '^DruidComboPoints.lua$' RetreatUI/RetreatUI.toc
+          grep -q '^DruidUtility.lua$' RetreatUI/RetreatUI.toc
           grep -q '^RogueComboPoints.lua$' RetreatUI/RetreatUI.toc
 
           # The Druid geometry is the immutable reference layout.
@@ -82,3 +86,10 @@ jobs:
           grep -q 'local function CurrentPackage' RetreatUI/WeakAuras.lua
           grep -q 'local key = class and class:lower()' RetreatUI/WeakAuras.lua
           grep -q 'function WeakAurasModule:InstallClassHUD' RetreatUI/WeakAuras.lua
+
+          # Druid utility is deliberately whitelist-driven and frame-anchored.
+          grep -q 'local MECHANICS = {' RetreatUI/DruidUtility.lua
+          grep -q '\[29833\].*Intangible Presence' RetreatUI/DruidUtility.lua
+          grep -q 'POISON_CLEANSING_TOTEM = 8166' RetreatUI/DruidUtility.lua
+          grep -q 'COMBAT_LOG_EVENT_UNFILTERED' RetreatUI/DruidUtility.lua
+          grep -q 'UNIT_AURA' RetreatUI/DruidUtility.lua
