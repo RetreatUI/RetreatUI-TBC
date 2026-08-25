@@ -2,7 +2,7 @@ name: One-time TBC-only repository cleanup
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
 
 permissions:
   contents: write
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   cleanup:
-    if: startsWith(github.event.issue.title, '[TBC-CLEANUP]')
+    if: startsWith(github.event.issue.title, '[TBC-CLEANUP]') && (github.event.action == 'opened' || github.event.label.name == 'tbc-cleanup')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +64,7 @@ jobs:
           test -s RetreatUI/ElvUIProfile.lua
           grep -q '^ElvUIProfile.lua$' RetreatUI/RetreatUI.toc
           ! test -e RetreatUI/CoAElvUIProfile.lua
-          ! git grep -n -E 'CoA|COA_|Conquest of Azeroth|Project Ascension' -- ':!README.md' ':!.github/workflows/tbc-only-cleanup.yml'
+          ! git grep -n -E 'CoA|COA_|Conquest of Azeroth|Project Ascension' -- ':!.github/workflows/tbc-only-cleanup.yml'
           grep -q 'TBC_RESOURCE_X, TBC_RESOURCE_Y = 0, -152' RetreatUI/WeakAuraData.lua
           grep -q 'TBC_MAIN_X, TBC_MAIN_Y = 0, -183' RetreatUI/WeakAuraData.lua
           grep -q 'TBC_UTILITY_X, TBC_UTILITY_Y = 0, -224' RetreatUI/WeakAuraData.lua
