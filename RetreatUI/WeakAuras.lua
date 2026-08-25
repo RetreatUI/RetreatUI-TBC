@@ -67,8 +67,9 @@ local function DeleteRetiredClassAuras(class)
   end
 
   for _, id in ipairs(RETIRED_DRUID_UTILITY_IDS) do
-    if WeakAuras.GetData(id) then
-      pcall(WeakAuras.Delete, id)
+    local existing = WeakAuras.GetData(id)
+    if existing then
+      pcall(WeakAuras.Delete, existing)
     end
   end
 end
@@ -185,6 +186,12 @@ function WeakAurasModule:InstallClassHUD()
   db.integrations.weakauras[class] = { installed = true, version = RUI.version }
 
   return true, tostring(class) .. " WeakAuras installed and verified"
+end
+
+function WeakAurasModule:OnLogin()
+  if Available() then
+    DeleteRetiredClassAuras(RUI:GetPlayerClass())
+  end
 end
 
 -- Compatibility aliases for beta.4/beta.5 callers.
